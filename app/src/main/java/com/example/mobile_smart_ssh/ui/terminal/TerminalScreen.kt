@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -212,14 +213,24 @@ fun TerminalScreen(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 IconButton(
-                    onClick = { viewModel.sendCommand() },
+                    onClick = {
+                        if (state.isExecuting) {
+                            viewModel.cancelCurrentCommand()
+                        } else {
+                            viewModel.sendCommand()
+                        }
+                    },
                     modifier = Modifier
                         .size(48.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(EmeraldPrimary),
+                        .background(if (state.isExecuting) RubyRed else EmeraldPrimary),
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.Black)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Wyślij")
+                    if (state.isExecuting) {
+                        Icon(Icons.Default.Stop, contentDescription = "Zatrzymaj", tint = Color.White)
+                    } else {
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Wyślij")
+                    }
                 }
             }
         }
@@ -234,7 +245,7 @@ private fun QuickCommandChips(onSelectCommand: (String) -> Unit) {
         "df -h /",
         "free -h",
         "ps aux --sort=-%cpu | head -n 10",
-        "quota -u minow",
+        "quota -u $(whoami)",
         "uname -a",
         "clear"
     )

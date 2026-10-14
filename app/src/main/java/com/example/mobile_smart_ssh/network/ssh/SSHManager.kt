@@ -10,10 +10,13 @@ import com.jcraft.jsch.ChannelShell
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.ByteArrayOutputStream
@@ -485,70 +488,163 @@ object SSHManager {
     // --- Interaktywny Terminal SSH ---
 
     /**
-     * Klasa reprezentująca aktywną sesję interaktywną SSH Terminala (ChannelShell z emulacją PTY xterm).
+     * Klasa sesji terminala SSH utrzymująca stałe, połączone połączenie SSH (Session)
+     * i wykonująca polecenia w czasie rzeczywistym z obsługą katalogu roboczego (cd)
+     * oraz strumieniowaniem stdout i stderr.
      */
-    class InteractiveTerminalSession(
-        private val session: Session,
-        private val channel: ChannelShell,
-        private val inputStream: InputStream,
-        private val outputStream: OutputStream
+    class TerminalSession(
+        private val host: String,
+        private val port: Int,
+        private val username: String,
+        private val privateKeyPem: String
     ) {
-        fun sendCommand(command: String) {
+        private var session: Session? = null
+        private var activeChannel: ChannelExec? = null
+
+        var currentDirectory: String = "~"
+            private set
+
+        suspend fun connect(): Result<String> = withContext(Dispatchers.IO) {
             try {
-                // W emulatorach PTY terminala Enter odpowiada znakowi Carriage Return (\r)
-                val fullCmd = if (command.endsWith("\r") || command.endsWith("\n")) command else "$command\r"
-                outputStream.write(fullCmd.toByteArray(Charsets.UTF_8))
-                outputStream.flush()
+                disconnect()
+                val s = createSession(host, port, username, privateKeyPem)
+                session = s
+
+                // Pobierz banner i początkowy katalog roboczy
+                val info = runQuickCommand(s, "pwd; uname -srm; uptime -p 2>/dev/null || true")
+                val lines = info.trim().lines()
+                if (lines.isNotEmpty()) {
+                    val pwd = lines[0].trim()
+                    if (pwd.startsWith("/")) currentDirectory = pwd
+                }
+                val banner = if (lines.size > 1) lines.subList(1, lines.size).joinToString(" • ") else "Raspberry Pi Linux"
+                Result.success(banner)
             } catch (e: Exception) {
-                Log.e(TAG, "Błąd wysyłania polecenia do terminala: ${e.message}")
+                Log.e(TAG, "Błąd łączenia z sesją terminala: ${e.message}", e)
+                Result.failure(e)
             }
         }
 
-        fun outputFlow(): Flow<String> = flow {
-            val buffer = ByteArray(2048)
-            while (coroutineContext.isActive && channel.isConnected) {
-                try {
-                    val count = inputStream.read(buffer)
-                    if (count > 0) {
-                        emit(String(buffer, 0, count, Charsets.UTF_8))
-                    } else if (count == -1) {
-                        break
-                    }
-                } catch (_: Exception) {
-                    break
-                }
+        suspend fun executeCommand(
+            command: String,
+            onLineReceived: (String, Boolean) -> Unit
+        ): Result<Int> = withContext(Dispatchers.IO) {
+            val s = session
+            if (s == null || !s.isConnected) {
+                return@withContext Result.failure(Exception("Brak aktywnego połączenia SSH."))
             }
-        }.flowOn(Dispatchers.IO)
 
-        fun close() {
-            try { inputStream.close() } catch (_: Exception) {}
-            try { outputStream.close() } catch (_: Exception) {}
-            try { channel.disconnect() } catch (_: Exception) {}
-            try { session.disconnect() } catch (_: Exception) {}
+            var channel: ChannelExec? = null
+            try {
+                channel = s.openChannel("exec") as ChannelExec
+                activeChannel = channel
+
+                val wrappedCommand = """
+                    cd "$currentDirectory" 2>/dev/null || cd ~
+                    $command
+                    __CMD_EXIT__=$?
+                    echo "___SMARTSSH_PWD___"
+                    pwd
+                    exit ${'$'}__CMD_EXIT__
+                """.trimIndent()
+
+                channel.setCommand(wrappedCommand)
+                channel.inputStream = null
+
+                val stdout = channel.inputStream
+                val stderr = channel.errStream
+
+                channel.connect(5000)
+
+                val outReader = BufferedReader(InputStreamReader(stdout, Charsets.UTF_8))
+                val errReader = BufferedReader(InputStreamReader(stderr, Charsets.UTF_8))
+
+                var reachedMarker = false
+                var updatedPwd = currentDirectory
+
+                coroutineScope {
+                    val stdoutJob = launch {
+                        while (coroutineContext.isActive) {
+                            val line = outReader.readLine() ?: break
+                            if (line == "___SMARTSSH_PWD___") {
+                                reachedMarker = true
+                                continue
+                            }
+                            if (reachedMarker) {
+                                val trimmed = line.trim()
+                                if (trimmed.startsWith("/")) {
+                                    updatedPwd = trimmed
+                                }
+                            } else {
+                                onLineReceived(line, false)
+                            }
+                        }
+                    }
+
+                    val stderrJob = launch {
+                        while (coroutineContext.isActive) {
+                            val errLine = errReader.readLine() ?: break
+                            onLineReceived(errLine, true)
+                        }
+                    }
+
+                    stdoutJob.join()
+                    stderrJob.join()
+                }
+
+                while (!channel.isClosed && coroutineContext.isActive) {
+                    delay(50)
+                }
+
+                currentDirectory = updatedPwd
+                Result.success(channel.exitStatus)
+            } catch (e: Exception) {
+                Log.e(TAG, "Błąd wykonania polecenia: ${e.message}", e)
+                Result.failure(e)
+            } finally {
+                activeChannel = null
+                channel?.disconnect()
+            }
+        }
+
+        fun cancelCurrentCommand() {
+            try {
+                activeChannel?.disconnect()
+                activeChannel = null
+            } catch (_: Exception) {}
+        }
+
+        private fun runQuickCommand(session: Session, command: String): String {
+            val channel = session.openChannel("exec") as ChannelExec
+            channel.setCommand(command)
+            channel.inputStream = null
+            val baos = ByteArrayOutputStream()
+            channel.outputStream = baos
+            channel.connect(5000)
+            val start = System.currentTimeMillis()
+            while (!channel.isClosed && System.currentTimeMillis() - start < 5000) {
+                Thread.sleep(50)
+            }
+            channel.disconnect()
+            return baos.toString(Charsets.UTF_8.name())
+        }
+
+        fun isConnected(): Boolean = session?.isConnected == true
+
+        fun disconnect() {
+            try { activeChannel?.disconnect() } catch (_: Exception) {}
+            activeChannel = null
+            try { session?.disconnect() } catch (_: Exception) {}
+            session = null
         }
     }
 
-    suspend fun openInteractiveTerminal(
+    fun createTerminalSession(
         host: String,
         port: Int,
         username: String,
         privateKeyPem: String
-    ): Result<InteractiveTerminalSession> = withContext(Dispatchers.IO) {
-        try {
-            val session = createSession(host, port, username, privateKeyPem)
-            val channel = session.openChannel("shell") as ChannelShell
-            channel.setPtyType("xterm", 80, 24, 640, 480)
-            channel.setPty(true)
-
-            // KLUCZOWE: Strumienie We/Wy MUSZĄ być pobrane PRZED wywołaniem channel.connect()
-            val inStream = channel.inputStream
-            val outStream = channel.outputStream
-
-            channel.connect(6000)
-            Result.success(InteractiveTerminalSession(session, channel, inStream, outStream))
-        } catch (e: Exception) {
-            Log.e(TAG, "Błąd otwierania terminala SSH: ${e.message}", e)
-            Result.failure(e)
-        }
+    ): TerminalSession {
+        return TerminalSession(host, port, username, privateKeyPem)
     }
 }

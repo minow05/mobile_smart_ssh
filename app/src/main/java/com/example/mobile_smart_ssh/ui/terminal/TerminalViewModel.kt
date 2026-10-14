@@ -6,18 +6,18 @@ import androidx.lifecycle.viewModelScope
 import com.example.mobile_smart_ssh.core.model.TerminalLine
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
 import com.example.mobile_smart_ssh.network.ssh.SSHManager
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 data class TerminalUiState(
     val lines: List<TerminalLine> = emptyList(),
     val isConnecting: Boolean = false,
     val isConnected: Boolean = false,
+    val isExecuting: Boolean = false,
     val currentCommandInput: String = "",
     val error: String? = null,
     val prompt: String = "minow@raspberrypi:~$"
@@ -26,7 +26,8 @@ data class TerminalUiState(
 class TerminalViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = ConfigRepository.getInstance(application)
-    private var terminalSession: SSHManager.InteractiveTerminalSession? = null
+    private var terminalSession: SSHManager.TerminalSession? = null
+    private var currentCommandJob: Job? = null
 
     private val _uiState = MutableStateFlow(TerminalUiState())
     val uiState: StateFlow<TerminalUiState> = _uiState.asStateFlow()
@@ -53,39 +54,39 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
             return
         }
 
-        val prompt = "${config.username}@${config.host}:~$"
+        val initialPrompt = "${config.username}@${config.host}:~$"
         _uiState.update {
             it.copy(
                 isConnecting = true,
-                prompt = prompt,
-                lines = it.lines + TerminalLine("Łączenie z ${config.host}:${config.port} przez SSH (Ed25519)...")
+                prompt = initialPrompt,
+                lines = it.lines + TerminalLine("Łączenie z ${config.host} przez SSH (Ed25519)...")
             )
         }
 
         viewModelScope.launch {
-            val result = SSHManager.openInteractiveTerminal(
+            terminalSession?.disconnect()
+            val session = SSHManager.createTerminalSession(
                 host = config.host,
                 port = config.port,
                 username = config.username,
                 privateKeyPem = privateKey
             )
+            terminalSession = session
 
-            result.fold(
-                onSuccess = { session ->
-                    terminalSession = session
+            val connectResult = session.connect()
+            connectResult.fold(
+                onSuccess = { banner ->
+                    val prompt = computePrompt(config.username, config.host, session.currentDirectory)
                     _uiState.update {
                         it.copy(
                             isConnecting = false,
                             isConnected = true,
-                            lines = it.lines + TerminalLine("Połączono z terminalem SSH (Raspberry Pi).")
+                            prompt = prompt,
+                            lines = it.lines + listOf(
+                                TerminalLine("Połączono z ${config.username}@${config.host} ($banner)"),
+                                TerminalLine("Wpisz polecenie lub wybierz z listy poniżej.")
+                            )
                         )
-                    }
-
-                    // Rozpocznij nasłuchiwanie strumienia wyjściowego terminala
-                    viewModelScope.launch(Dispatchers.IO) {
-                        session.outputFlow().collect { chunk ->
-                            processIncomingChunk(chunk)
-                        }
                     }
                 },
                 onFailure = { err ->
@@ -94,7 +95,7 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
                             isConnecting = false,
                             isConnected = false,
                             error = err.message,
-                            lines = it.lines + TerminalLine("Błąd połączenia: ${err.message}", isError = true)
+                            lines = it.lines + TerminalLine("Błąd połączenia SSH: ${err.message}", isError = true)
                         )
                     }
                 }
@@ -102,95 +103,103 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private fun processIncomingChunk(chunk: String) {
-        val clean = stripAnsiCodes(chunk).replace("\r\n", "\n").replace("\r", "\n")
-        if (clean.isEmpty()) return
-
-        val chunkLines = clean.split("\n")
-        viewModelScope.launch(Dispatchers.Main) {
-            _uiState.update { current ->
-                val currentLines = current.lines.toMutableList()
-                for (i in chunkLines.indices) {
-                    val lineText = chunkLines[i]
-                    if (i == 0) {
-                        if (currentLines.isNotEmpty() && !currentLines.last().isCommand) {
-                            val last = currentLines.removeAt(currentLines.size - 1)
-                            currentLines.add(last.copy(text = last.text + lineText))
-                        } else if (lineText.isNotEmpty()) {
-                            currentLines.add(TerminalLine(text = lineText))
-                        }
-                    } else {
-                        if (lineText.isNotEmpty() || i < chunkLines.size - 1) {
-                            currentLines.add(TerminalLine(text = lineText))
-                        }
-                    }
-                }
-                current.copy(lines = currentLines.takeLast(1000))
-            }
-        }
-    }
-
     fun sendCommand(cmd: String = _uiState.value.currentCommandInput) {
         val trimmed = cmd.trim()
-        if (trimmed.isEmpty()) {
-            terminalSession?.sendCommand("")
-            return
-        }
+        if (trimmed.isEmpty()) return
 
         if (trimmed == "clear") {
             _uiState.update { it.copy(lines = emptyList(), currentCommandInput = "") }
             return
         }
 
-        _uiState.update { it.copy(currentCommandInput = "") }
-
+        val config = repository.loadConfig()
         val session = terminalSession
-        if (session != null && _uiState.value.isConnected) {
-            session.sendCommand(trimmed)
-        } else {
+        if (session == null || !_uiState.value.isConnected) {
             _uiState.update {
-                it.copy(lines = it.lines + TerminalLine(text = "${it.prompt} $trimmed", isCommand = true))
+                it.copy(
+                    lines = it.lines + TerminalLine("Brak połączenia z terminalem. Spróbuj połączyć ponownie.", isError = true)
+                )
             }
-            executeFallbackCommand(trimmed)
+            return
         }
-    }
 
-    private fun executeFallbackCommand(command: String) {
-        val config = repository.loadConfig() ?: return
-        val privateKey = repository.getPrivateKey() ?: return
-
-        viewModelScope.launch {
-            val result = SSHManager.executeCommand(
-                host = config.host,
-                port = config.port,
-                username = config.username,
-                privateKeyPem = privateKey,
-                command = command
+        val currentPrompt = _uiState.value.prompt
+        _uiState.update {
+            it.copy(
+                currentCommandInput = "",
+                isExecuting = true,
+                lines = it.lines + TerminalLine(text = "$currentPrompt $trimmed", isCommand = true)
             )
+        }
+
+        currentCommandJob = viewModelScope.launch {
+            val result = session.executeCommand(trimmed) { line, isError ->
+                val cleanLine = stripAnsiCodes(line)
+                if (cleanLine.isNotBlank() || !isError) {
+                    _uiState.update { state ->
+                        state.copy(
+                            lines = (state.lines + TerminalLine(cleanLine, isError = isError)).takeLast(1000)
+                        )
+                    }
+                }
+            }
+
             result.fold(
-                onSuccess = { output ->
-                    val clean = stripAnsiCodes(output).lines().map { TerminalLine(it) }
-                    _uiState.update { it.copy(lines = (it.lines + clean).takeLast(1000)) }
+                onSuccess = { exitStatus ->
+                    val user = config?.username ?: "minow"
+                    val host = config?.host ?: "rpi"
+                    val updatedPrompt = computePrompt(user, host, session.currentDirectory)
+                    _uiState.update {
+                        it.copy(
+                            isExecuting = false,
+                            prompt = updatedPrompt
+                        )
+                    }
                 },
                 onFailure = { err ->
                     _uiState.update {
-                        it.copy(lines = it.lines + TerminalLine("Błąd: ${err.message}", isError = true))
+                        it.copy(
+                            isExecuting = false,
+                            lines = (it.lines + TerminalLine("Błąd: ${err.message}", isError = true)).takeLast(1000)
+                        )
                     }
                 }
             )
         }
     }
 
+    fun cancelCurrentCommand() {
+        terminalSession?.cancelCurrentCommand()
+        currentCommandJob?.cancel()
+        _uiState.update {
+            it.copy(
+                isExecuting = false,
+                lines = it.lines + TerminalLine("^C (Zatrzymano)", isError = true)
+            )
+        }
+    }
+
+    private fun computePrompt(user: String, host: String, rawDir: String): String {
+        val homeDir = "/home/$user"
+        val displayDir = when {
+            rawDir == homeDir || rawDir == "~" -> "~"
+            rawDir.startsWith("$homeDir/") -> "~" + rawDir.removePrefix(homeDir)
+            else -> rawDir
+        }
+        return "$user@$host:$displayDir$"
+    }
+
     private fun stripAnsiCodes(input: String): String {
         return input
             .replace(Regex("\u001B\\[[;?0-9]*[a-zA-Z]"), "")
-            .replace(Regex("\u001B\\([a-zA-Z]"), "")
-            .replace(Regex("\u001B\\][0-9];[^\u0007]*\u0007"), "")
+            .replace(Regex("\u001B\\][^\u0007\u001B]*(\u0007|\u001B\\\\)"), "")
+            .replace(Regex("\u001B[()][A-Za-z0-9]"), "")
             .replace(Regex("\u001B[=>]"), "")
+            .replace("\r", "")
     }
 
     override fun onCleared() {
         super.onCleared()
-        terminalSession?.close()
+        terminalSession?.disconnect()
     }
 }
