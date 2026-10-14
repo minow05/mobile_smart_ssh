@@ -58,6 +58,14 @@ set JAVA_HOME=%JAVA_HOME:"=%
 set JAVA_EXE=%JAVA_HOME%/bin/java.exe
 
 if exist "%JAVA_EXE%" goto execute
+if exist "C:\Program Files\Java\jdk-21\bin\java.exe" (
+    set JAVA_HOME=C:\Program Files\Java\jdk-21
+    set JAVA_EXE=C:\Program Files\Java\jdk-21\bin\java.exe
+    goto execute
+)
+set JAVA_EXE=java.exe
+%JAVA_EXE% -version >NUL 2>&1
+if %ERRORLEVEL% equ 0 goto execute
 
 echo. 1>&2
 echo ERROR: JAVA_HOME is set to an invalid directory: %JAVA_HOME% 1>&2
