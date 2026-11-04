@@ -71,17 +71,11 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = koinViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
 
     DashboardContent(
         state = state,
         onAction = viewModel::onAction,
-        onNavigateToTerminal = {
-            context.startActivity(TerminalActivity.createIntent(context))
-        },
-        onLaunchTerminalCommand = { cmd ->
-            context.startActivity(TerminalActivity.createIntent(context, initialCommand = cmd))
-        },
+        onNavigateToTerminal = onNavigateToTerminal,
         onNavigateToFiles = onNavigateToFiles,
         onNavigateToResources = onNavigateToResources,
         onNavigateToSettings = onNavigateToSettings
@@ -94,7 +88,6 @@ fun DashboardContent(
     state: DashboardUiState,
     onAction: (DashboardAction) -> Unit,
     onNavigateToTerminal: () -> Unit,
-    onLaunchTerminalCommand: (String) -> Unit,
     onNavigateToFiles: () -> Unit,
     onNavigateToResources: () -> Unit,
     onNavigateToSettings: () -> Unit
@@ -173,37 +166,7 @@ fun DashboardContent(
                 onClick = onNavigateToTerminal
             )
 
-            // Szybkie polecenia uruchamiane w osobnym TerminalActivity z parametrem Intent (htop, uptime, free -h)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                listOf("htop", "uptime", "free -h").forEach { cmd ->
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { onLaunchTerminalCommand(cmd) },
-                        colors = CardDefaults.cardColors(containerColor = SlateSurfaceVariant),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            text = "> $cmd",
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = CyanAccent,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Karta 2: Remote File & Network Storage Manager
             DashboardActionCard(
@@ -251,7 +214,6 @@ private fun DashboardContentPreview() {
             ),
             onAction = {},
             onNavigateToTerminal = {},
-            onLaunchTerminalCommand = {},
             onNavigateToFiles = {},
             onNavigateToResources = {},
             onNavigateToSettings = {}
