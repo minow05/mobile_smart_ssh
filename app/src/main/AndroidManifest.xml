@@ -28,6 +28,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Drugie Activity aplikacji (Terminal SSH uruchamiany przez Intent) -->
+        <activity
+            android:name=".ui.terminal.TerminalActivity"
+            android:exported="true"
+            android:label="Terminal SSH"
+            android:theme="@style/Theme.Mobile_smart_ssh"
+            android:windowSoftInputMode="adjustResize" />
     </application>
 
 </manifest>

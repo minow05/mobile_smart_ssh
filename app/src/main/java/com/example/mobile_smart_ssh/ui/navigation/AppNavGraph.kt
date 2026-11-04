@@ -1,6 +1,7 @@
 package com.example.mobile_smart_ssh.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -10,6 +11,7 @@ import com.example.mobile_smart_ssh.ui.dashboard.DashboardScreen
 import com.example.mobile_smart_ssh.ui.files.FileBrowserScreen
 import com.example.mobile_smart_ssh.ui.resources.ResourceMonitorScreen
 import com.example.mobile_smart_ssh.ui.settings.SettingsScreen
+import com.example.mobile_smart_ssh.ui.terminal.TerminalActivity
 import com.example.mobile_smart_ssh.ui.terminal.TerminalScreen
 import com.example.mobile_smart_ssh.ui.wizard.SetupWizardScreen
 import org.koin.compose.koinInject
@@ -44,8 +46,11 @@ fun AppNavGraph(
         }
 
         composable<DashboardRoute> {
+            val context = LocalContext.current
             DashboardScreen(
-                onNavigateToTerminal = { navController.navigate(TerminalRoute) },
+                onNavigateToTerminal = {
+                    context.startActivity(TerminalActivity.createIntent(context))
+                },
                 onNavigateToFiles = { navController.navigate(FileBrowserRoute) },
                 onNavigateToResources = { navController.navigate(ResourceMonitorRoute) },
                 onNavigateToSettings = { navController.navigate(SettingsRoute) }

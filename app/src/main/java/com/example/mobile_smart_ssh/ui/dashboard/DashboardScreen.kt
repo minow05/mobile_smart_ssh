@@ -44,11 +44,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.koin.androidx.compose.koinViewModel
+import com.example.mobile_smart_ssh.ui.terminal.TerminalActivity
 import com.example.mobile_smart_ssh.ui.theme.CyanAccent
 import com.example.mobile_smart_ssh.ui.theme.EmeraldPrimary
 import com.example.mobile_smart_ssh.ui.theme.IndigoSecondary
@@ -67,6 +69,7 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = koinViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -133,16 +136,50 @@ fun DashboardScreen(
                 modifier = Modifier.padding(start = 4.dp, bottom = 12.dp)
             )
 
-            // Karta 1: Interaktywny Terminal SSH
+            // Karta 1: Interaktywny Terminal SSH (Dedykowane Activity)
             DashboardActionCard(
                 title = "Terminal SSH",
-                subtitle = "Bezpośrednia konsola z obsługą kolorów ANSI i szybkich poleceń.",
+                subtitle = "Dedykowane Activity (Intent) z obsługą sesji w tle i kolorów ANSI.",
                 icon = Icons.Default.Computer,
                 iconTint = EmeraldPrimary,
-                onClick = onNavigateToTerminal
+                onClick = {
+                    context.startActivity(TerminalActivity.createIntent(context))
+                }
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            // Szybkie polecenia uruchamiane w osobnym TerminalActivity z parametrem Intent (htop, uptime, free -h)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("htop", "uptime", "free -h").forEach { cmd ->
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                context.startActivity(TerminalActivity.createIntent(context, initialCommand = cmd))
+                            },
+                        colors = CardDefaults.cardColors(containerColor = SlateSurfaceVariant),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "> $cmd",
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = CyanAccent,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Karta 2: Remote File & Network Storage Manager
             DashboardActionCard(
