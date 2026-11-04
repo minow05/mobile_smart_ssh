@@ -21,6 +21,13 @@ class DashboardViewModel(
 
     init {
         loadConfigAndCheckStatus()
+        viewModelScope.launch {
+            sessionManager.state.collect { sessionState ->
+                if (sessionState.isConnected) {
+                    _uiState.update { it.copy(isHostOnline = true, isCheckingStatus = false) }
+                }
+            }
+        }
     }
 
     fun onAction(action: DashboardAction) {
