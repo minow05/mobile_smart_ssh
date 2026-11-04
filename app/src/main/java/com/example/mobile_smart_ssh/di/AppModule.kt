@@ -2,7 +2,10 @@ package com.example.mobile_smart_ssh.di
 
 import com.example.mobile_smart_ssh.core.security.KeyManager
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
+import com.example.mobile_smart_ssh.data.repository.EncryptedConfigRepository
+import com.example.mobile_smart_ssh.monitor.DefaultServerMonitor
 import com.example.mobile_smart_ssh.monitor.ServerMonitor
+import com.example.mobile_smart_ssh.network.ssh.DefaultSSHSessionManager
 import com.example.mobile_smart_ssh.network.ssh.SSHSessionManager
 import com.example.mobile_smart_ssh.ui.dashboard.DashboardViewModel
 import com.example.mobile_smart_ssh.ui.files.FileBrowserViewModel
@@ -16,12 +19,12 @@ import org.koin.dsl.module
 
 val appModule = module {
     // Single instance of ConfigRepository managed by Koin
-    single { ConfigRepository.getInstance(androidContext()) }
+    single<ConfigRepository> { EncryptedConfigRepository.getInstance(androidContext()) }
     single { KeyManager }
     // Global persistent SSH session manager (replicates desktop m_session behavior)
-    single { SSHSessionManager(get()) }
+    single<SSHSessionManager> { DefaultSSHSessionManager(get()) }
     // Server monitor holding application context internally
-    single { ServerMonitor(androidContext(), get()) }
+    single<ServerMonitor> { DefaultServerMonitor(androidContext(), get()) }
 
     // ViewModels with constructor injection (ZERO Context injected into any ViewModel!)
     viewModel { DashboardViewModel(get(), get()) }
