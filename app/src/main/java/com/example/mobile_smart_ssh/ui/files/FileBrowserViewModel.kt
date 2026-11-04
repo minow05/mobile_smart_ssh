@@ -20,39 +20,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 
-enum class StorageDrive {
-    HOME,   // [minow]
-    SHARED  // [shared]
-}
-
-data class FileBrowserUiState(
-    val currentDrive: StorageDrive = StorageDrive.HOME,
-    val activeProtocol: String = "Samba (SMB)",
-    val currentPath: String = "",
-    val items: List<RemoteFileItem> = emptyList(),
-    val isLoading: Boolean = false,
-    val error: String? = null,
-    val statusMessage: String? = null,
-    val isCreateDirDialogVisible: Boolean = false,
-    val newDirName: String = "",
-    val selectedItemForAction: RemoteFileItem? = null
-)
-
-sealed interface FileBrowserAction {
-    data class SelectDrive(val drive: StorageDrive) : FileBrowserAction
-    data class SetNewDirName(val name: String) : FileBrowserAction
-    data class SetCreateDirDialogVisible(val visible: Boolean) : FileBrowserAction
-    data class SelectItemForAction(val item: RemoteFileItem?) : FileBrowserAction
-    data object ClearStatusMessage : FileBrowserAction
-    data class LoadDirectory(val relativePath: String? = null) : FileBrowserAction
-    data class NavigateIntoFolder(val item: RemoteFileItem) : FileBrowserAction
-    data object NavigateUp : FileBrowserAction
-    data class CreateDirectory(val dirName: String) : FileBrowserAction
-    data class DeleteItem(val item: RemoteFileItem) : FileBrowserAction
-    data class DownloadFile(val item: RemoteFileItem, val context: Context) : FileBrowserAction
-    data class UploadFile(val uri: Uri, val context: Context) : FileBrowserAction
-}
-
 class FileBrowserViewModel(
     private val repository: ConfigRepository
 ) : ViewModel() {
@@ -81,26 +48,26 @@ class FileBrowserViewModel(
         }
     }
 
-    fun selectDrive(drive: StorageDrive) {
+    private fun selectDrive(drive: StorageDrive) {
         if (_uiState.value.currentDrive != drive) {
             _uiState.update { it.copy(currentDrive = drive, currentPath = "") }
             loadDirectory("")
         }
     }
 
-    fun setNewDirName(name: String) {
+    private fun setNewDirName(name: String) {
         _uiState.update { it.copy(newDirName = name) }
     }
 
-    fun setCreateDirDialogVisible(visible: Boolean) {
+    private fun setCreateDirDialogVisible(visible: Boolean) {
         _uiState.update { it.copy(isCreateDirDialogVisible = visible, newDirName = "") }
     }
 
-    fun selectItemForAction(item: RemoteFileItem?) {
+    private fun selectItemForAction(item: RemoteFileItem?) {
         _uiState.update { it.copy(selectedItemForAction = item) }
     }
 
-    fun clearStatusMessage() {
+    private fun clearStatusMessage() {
         _uiState.update { it.copy(statusMessage = null, error = null) }
     }
 
@@ -117,7 +84,7 @@ class FileBrowserViewModel(
      * 1. Zgodnie ze specyfikacją domyślnie używa protokołu Samba (SMB/CIFS) dla [minow] i [shared].
      * 2. Jeśli Samba nie jest dostępna, automatycznie przełącza się na SFTP (fallback).
      */
-    fun loadDirectory(relativePath: String = _uiState.value.currentPath) {
+    private fun loadDirectory(relativePath: String = _uiState.value.currentPath) {
         val config = repository.loadConfig() ?: return
         val privateKey = repository.getPrivateKey() ?: ""
 
@@ -184,14 +151,14 @@ class FileBrowserViewModel(
         }
     }
 
-    fun navigateIntoFolder(item: RemoteFileItem) {
+    private fun navigateIntoFolder(item: RemoteFileItem) {
         if (!item.isDirectory) return
         val current = _uiState.value.currentPath
         val next = if (current.isEmpty()) item.name else "$current/${item.name}"
         loadDirectory(next)
     }
 
-    fun navigateUp() {
+    private fun navigateUp() {
         val current = _uiState.value.currentPath
         if (current.isEmpty()) return
         val parts = current.split("/").filter { it.isNotEmpty() }
@@ -199,7 +166,7 @@ class FileBrowserViewModel(
         loadDirectory(up)
     }
 
-    fun createDirectory(dirName: String) {
+    private fun createDirectory(dirName: String) {
         val trimmed = dirName.trim()
         if (trimmed.isEmpty()) return
 
@@ -248,7 +215,7 @@ class FileBrowserViewModel(
         }
     }
 
-    fun deleteItem(item: RemoteFileItem) {
+    private fun deleteItem(item: RemoteFileItem) {
         val config = repository.loadConfig() ?: return
         val privateKey = repository.getPrivateKey() ?: ""
 
@@ -291,7 +258,7 @@ class FileBrowserViewModel(
         }
     }
 
-    fun downloadFileToDevice(item: RemoteFileItem, context: Context) {
+    private fun downloadFileToDevice(item: RemoteFileItem, context: Context) {
         val config = repository.loadConfig() ?: return
         val privateKey = repository.getPrivateKey() ?: ""
 
@@ -357,7 +324,7 @@ class FileBrowserViewModel(
         }
     }
 
-    fun uploadFileFromDevice(uri: Uri, context: Context) {
+    private fun uploadFileFromDevice(uri: Uri, context: Context) {
         val config = repository.loadConfig() ?: return
         val privateKey = repository.getPrivateKey() ?: ""
 

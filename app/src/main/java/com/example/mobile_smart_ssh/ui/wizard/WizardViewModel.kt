@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mobile_smart_ssh.core.model.ServerConfig
 import com.example.mobile_smart_ssh.core.security.KeyManager
-import com.example.mobile_smart_ssh.core.security.SshKeyPair
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
 import com.example.mobile_smart_ssh.network.ssh.SSHManager
 import com.example.mobile_smart_ssh.network.ssh.SSHSessionManager
@@ -14,48 +13,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-enum class LogType {
-    HEADER,
-    INFO,
-    SUCCESS,
-    ERROR
-}
-
-data class WizardLogEntry(
-    val text: String,
-    val type: LogType = LogType.INFO
-)
-
-enum class WizardStage {
-    INPUT,       // Wprowadzanie IP, usera i hasła
-    RUNNING,     // Automatyczny proces wdrożenia (logi na żywo)
-    COMPLETED,   // Pomyślnie zweryfikowano i zapisano
-    FAILED       // Błąd połączenia / wdrożenia
-}
-
-data class WizardUiState(
-    val host: String = "minow.rpi",
-    val port: String = "22",
-    val username: String = "minow",
-    val password: String = "",
-    val useAsSmbPassword: Boolean = true,
-    val currentStage: WizardStage = WizardStage.INPUT,
-    val isRunning: Boolean = false,
-    val logs: List<WizardLogEntry> = emptyList(),
-    val error: String? = null,
-    val keyPair: SshKeyPair? = null
-)
-
-sealed interface WizardAction {
-    data class UpdateHost(val host: String) : WizardAction
-    data class UpdatePort(val port: String) : WizardAction
-    data class UpdateUsername(val username: String) : WizardAction
-    data class UpdatePassword(val password: String) : WizardAction
-    data class UpdateUseAsSmbPassword(val use: Boolean) : WizardAction
-    data object ResetToInput : WizardAction
-    data class StartAutomatedSetup(val onFinished: () -> Unit) : WizardAction
-}
 
 class WizardViewModel(
     private val repository: ConfigRepository,
@@ -91,27 +48,27 @@ class WizardViewModel(
         }
     }
 
-    fun onHostChanged(host: String) {
+    private fun onHostChanged(host: String) {
         _uiState.update { it.copy(host = host) }
     }
 
-    fun onPortChanged(port: String) {
+    private fun onPortChanged(port: String) {
         _uiState.update { it.copy(port = port.filter { char -> char.isDigit() }) }
     }
 
-    fun onUsernameChanged(username: String) {
+    private fun onUsernameChanged(username: String) {
         _uiState.update { it.copy(username = username) }
     }
 
-    fun onPasswordChanged(password: String) {
+    private fun onPasswordChanged(password: String) {
         _uiState.update { it.copy(password = password) }
     }
 
-    fun onUseAsSmbPasswordChanged(use: Boolean) {
+    private fun onUseAsSmbPasswordChanged(use: Boolean) {
         _uiState.update { it.copy(useAsSmbPassword = use) }
     }
 
-    fun resetToInput() {
+    private fun resetToInput() {
         _uiState.update {
             it.copy(
                 currentStage = WizardStage.INPUT,
@@ -134,7 +91,7 @@ class WizardViewModel(
      * 3. Weryfikacja połączenia bezhasłowego kluczem Ed25519
      * 4. Zapis powiązania (Single-Host Binding) i przejście do Dashboardu
      */
-    fun startAutomatedSetup(onFinished: () -> Unit) {
+    private fun startAutomatedSetup(onFinished: () -> Unit) {
         val state = _uiState.value
         val host = state.host.trim()
         val portInt = state.port.toIntOrNull() ?: 22

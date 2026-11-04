@@ -1,8 +1,6 @@
 package com.example.mobile_smart_ssh.ui.settings
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
-import com.example.mobile_smart_ssh.core.model.ServerConfig
 import com.example.mobile_smart_ssh.core.security.KeyManager
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
 import com.example.mobile_smart_ssh.monitor.ServerMonitor
@@ -12,30 +10,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-data class SettingsUiState(
-    val config: ServerConfig? = null,
-    val publicKey: String = "",
-    val fingerprint: String = "",
-    val isResetDialogOpen: Boolean = false,
-    val smbPasswordInput: String = "",
-    val monitorEnabled: Boolean = true,
-    val statusMessage: String? = null
-)
-
-sealed interface SettingsAction {
-    data object LoadSettings : SettingsAction
-    data class UpdateSmbPassword(val password: String) : SettingsAction
-    data class ToggleMonitor(val enabled: Boolean) : SettingsAction
-    data class SetResetDialogOpen(val open: Boolean) : SettingsAction
-    data class ResetConfiguration(val onResetComplete: () -> Unit) : SettingsAction
-    data object SendTestNotification : SettingsAction
-    data object TriggerImmediateCheck : SettingsAction
-    data object ClearStatusMessage : SettingsAction
-}
-
 class SettingsViewModel(
     private val repository: ConfigRepository,
-    private val context: Context,
+    private val serverMonitor: ServerMonitor,
     private val sessionManager: SSHSessionManager
 ) : ViewModel() {
 
@@ -54,16 +31,21 @@ class SettingsViewModel(
             is SettingsAction.SetResetDialogOpen -> setResetDialogOpen(action.open)
             is SettingsAction.ResetConfiguration -> resetConfiguration(action.onResetComplete)
             SettingsAction.SendTestNotification -> {
-                val sent = ServerMonitor.sendTestNotification(context)
+                val sent = serverMonitor.sendTestNotification()
                 val msg = if (sent) {
                     "Wysłano powiadomienie testowe! Sprawdź górny pasek systemowy."
                 } else {
                     "Brak uprawnienia do wyświetlania powiadomień w systemie Android."
                 }
-                _uiState.update { it.copy(statusMessage = msg) }
+                _uiState.update {
+                    it.copy(
+                        statusMessage = msg,
+                        hasNotificationPermission = serverMonitor.hasNotificationPermission()
+                    )
+                }
             }
             SettingsAction.TriggerImmediateCheck -> {
-                ServerMonitor.triggerImmediateCheck(context)
+                serverMonitor.triggerImmediateCheck()
                 _uiState.update { it.copy(statusMessage = "Zlecono natychmiastowe sprawdzenie serwera w tle (WorkManager).") }
             }
             SettingsAction.ClearStatusMessage -> {
@@ -72,7 +54,7 @@ class SettingsViewModel(
         }
     }
 
-    fun loadSettings() {
+    private fun loadSettings() {
         val cfg = repository.loadConfig()
         val pubKey = repository.getPublicKey() ?: ""
         val fp = if (pubKey.isNotBlank()) KeyManager.calculateFingerprint(pubKey) else "Brak klucza"
@@ -83,22 +65,28 @@ class SettingsViewModel(
                 publicKey = pubKey,
                 fingerprint = fp,
                 smbPasswordInput = cfg?.smbPassword ?: "",
-                monitorEnabled = ServerMonitor.isEnabled(context)
+                monitorEnabled = serverMonitor.isEnabled(),
+                hasNotificationPermission = serverMonitor.hasNotificationPermission()
             )
         }
     }
 
-    fun onSmbPasswordChanged(pwd: String) {
+    private fun onSmbPasswordChanged(pwd: String) {
         _uiState.update { it.copy(smbPasswordInput = pwd) }
         repository.saveSmbPassword(pwd)
     }
 
-    fun onMonitorEnabledChanged(enabled: Boolean) {
-        ServerMonitor.setEnabled(context, enabled)
-        _uiState.update { it.copy(monitorEnabled = enabled) }
+    private fun onMonitorEnabledChanged(enabled: Boolean) {
+        serverMonitor.setEnabled(enabled)
+        _uiState.update {
+            it.copy(
+                monitorEnabled = enabled,
+                hasNotificationPermission = serverMonitor.hasNotificationPermission()
+            )
+        }
     }
 
-    fun setResetDialogOpen(open: Boolean) {
+    private fun setResetDialogOpen(open: Boolean) {
         _uiState.update { it.copy(isResetDialogOpen = open) }
     }
 
@@ -106,7 +94,7 @@ class SettingsViewModel(
      * Czyści lokalną konfigurację telefonu i wywołuje akcję powrotu do kreatora.
      * Zgodnie z wymaganiami zadania, dane na Raspberry Pi pozostają NIETKNIĘTE.
      */
-    fun resetConfiguration(onResetComplete: () -> Unit) {
+    private fun resetConfiguration(onResetComplete: () -> Unit) {
         sessionManager.disconnect()
         repository.resetConfiguration()
         _uiState.update { it.copy(isResetDialogOpen = false) }

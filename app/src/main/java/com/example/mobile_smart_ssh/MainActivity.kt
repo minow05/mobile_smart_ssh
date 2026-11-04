@@ -14,15 +14,18 @@ import androidx.compose.ui.Modifier
 import com.example.mobile_smart_ssh.monitor.ServerMonitor
 import com.example.mobile_smart_ssh.ui.navigation.AppNavGraph
 import com.example.mobile_smart_ssh.ui.theme.SmartSSHTheme
+import org.koin.android.ext.android.inject
 
 class MainActivity : ComponentActivity() {
+
+    private val serverMonitor: ServerMonitor by inject()
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         Log.i("MainActivity", "POST_NOTIFICATIONS permission granted: $isGranted")
-        if (isGranted && ServerMonitor.isEnabled(this)) {
-            ServerMonitor.schedule(this)
+        if (isGranted && serverMonitor.isEnabled()) {
+            serverMonitor.schedule()
         }
     }
 
@@ -30,9 +33,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        if (ServerMonitor.isEnabled(this)) {
-            ServerMonitor.schedule(this)
-            if (!ServerMonitor.hasNotificationPermission(this) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (serverMonitor.isEnabled()) {
+            serverMonitor.schedule()
+            if (!serverMonitor.hasNotificationPermission() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }

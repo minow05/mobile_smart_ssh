@@ -66,7 +66,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.koin.androidx.compose.koinViewModel
-import com.example.mobile_smart_ssh.monitor.ServerMonitor
 import com.example.mobile_smart_ssh.ui.theme.CyanAccent
 import com.example.mobile_smart_ssh.ui.theme.EmeraldPrimary
 import com.example.mobile_smart_ssh.ui.theme.RubyRed
@@ -265,7 +264,7 @@ fun SettingsScreen(
                             checked = state.monitorEnabled,
                             onCheckedChange = { enabled ->
                                 viewModel.onAction(SettingsAction.ToggleMonitor(enabled))
-                                if (enabled && !ServerMonitor.hasNotificationPermission(context)) {
+                                if (enabled && !state.hasNotificationPermission) {
                                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                 }
                             }
@@ -283,7 +282,7 @@ fun SettingsScreen(
                         ) {
                             OutlinedButton(
                                 onClick = {
-                                    if (!ServerMonitor.hasNotificationPermission(context)) {
+                                    if (!state.hasNotificationPermission) {
                                         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                     } else {
                                         viewModel.onAction(SettingsAction.SendTestNotification)

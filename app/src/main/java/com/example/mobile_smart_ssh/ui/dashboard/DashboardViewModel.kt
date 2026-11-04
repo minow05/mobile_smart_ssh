@@ -2,7 +2,6 @@ package com.example.mobile_smart_ssh.ui.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.mobile_smart_ssh.core.model.ServerConfig
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
 import com.example.mobile_smart_ssh.network.ssh.SSHManager
 import com.example.mobile_smart_ssh.network.ssh.SSHSessionManager
@@ -11,19 +10,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-data class DashboardUiState(
-    val config: ServerConfig? = null,
-    val isCheckingStatus: Boolean = false,
-    val isHostOnline: Boolean? = null,
-    val lastPingTimestamp: Long = 0L,
-    val quickUptime: String = ""
-)
-
-sealed interface DashboardAction {
-    data object Refresh : DashboardAction
-    data object CheckStatus : DashboardAction
-}
 
 class DashboardViewModel(
     private val repository: ConfigRepository,
@@ -44,7 +30,7 @@ class DashboardViewModel(
         }
     }
 
-    fun loadConfigAndCheckStatus() {
+    private fun loadConfigAndCheckStatus() {
         val cfg = repository.loadConfig()
         _uiState.update { it.copy(config = cfg) }
 
@@ -55,7 +41,7 @@ class DashboardViewModel(
         }
     }
 
-    fun checkHostStatus() {
+    private fun checkHostStatus() {
         val cfg = _uiState.value.config ?: repository.loadConfig() ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isCheckingStatus = true) }

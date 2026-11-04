@@ -12,23 +12,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class TerminalUiState(
-    val lines: List<TerminalLine> = emptyList(),
-    val isConnecting: Boolean = false,
-    val isConnected: Boolean = false,
-    val isExecuting: Boolean = false,
-    val currentCommandInput: String = "",
-    val error: String? = null,
-    val prompt: String = "minow@raspberrypi:~$"
-)
-
-sealed interface TerminalAction {
-    data class UpdateInput(val input: String) : TerminalAction
-    data class SendCommand(val command: String? = null) : TerminalAction
-    data object CancelCommand : TerminalAction
-    data object Connect : TerminalAction
-}
-
 class TerminalViewModel(
     private val repository: ConfigRepository,
     private val sessionManager: SSHSessionManager
@@ -67,11 +50,11 @@ class TerminalViewModel(
         }
     }
 
-    fun onCommandInputChanged(input: String) {
+    private fun onCommandInputChanged(input: String) {
         _uiState.update { it.copy(currentCommandInput = input) }
     }
 
-    fun sendCommand(cmd: String = _uiState.value.currentCommandInput) {
+    private fun sendCommand(cmd: String = _uiState.value.currentCommandInput) {
         val trimmed = cmd.trim()
         if (trimmed.isEmpty()) return
 
@@ -115,7 +98,7 @@ class TerminalViewModel(
         }
     }
 
-    fun cancelCurrentCommand() {
+    private fun cancelCurrentCommand() {
         sessionManager.cancelCurrentCommand()
         currentCommandJob?.cancel()
         _uiState.update { it.copy(isExecuting = false) }

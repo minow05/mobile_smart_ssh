@@ -2,7 +2,6 @@ package com.example.mobile_smart_ssh.ui.resources
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.mobile_smart_ssh.core.model.SystemResources
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
 import com.example.mobile_smart_ssh.network.ssh.SSHManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,17 +9,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-data class ResourceMonitorUiState(
-    val resources: SystemResources = SystemResources(),
-    val isLoading: Boolean = false,
-    val error: String? = null,
-    val lastRefreshTime: Long = 0L
-)
-
-sealed interface ResourceMonitorAction {
-    data object Refresh : ResourceMonitorAction
-}
 
 class ResourceMonitorViewModel(
     private val repository: ConfigRepository
@@ -39,7 +27,7 @@ class ResourceMonitorViewModel(
         }
     }
 
-    fun refreshResources() {
+    private fun refreshResources() {
         val config = repository.loadConfig()
         val privateKey = repository.getPrivateKey()
 
