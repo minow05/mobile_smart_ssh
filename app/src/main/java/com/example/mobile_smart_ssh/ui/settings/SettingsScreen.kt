@@ -1,6 +1,9 @@
 package com.example.mobile_smart_ssh.ui.settings
 
+import android.Manifest
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +28,7 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -37,6 +41,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -56,6 +61,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.mobile_smart_ssh.monitor.ServerMonitor
 import com.example.mobile_smart_ssh.ui.theme.CyanAccent
 import com.example.mobile_smart_ssh.ui.theme.EmeraldPrimary
 import com.example.mobile_smart_ssh.ui.theme.RubyRed
@@ -74,6 +80,9 @@ fun SettingsScreen(
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {}
 
     Scaffold(
         topBar = {
@@ -205,6 +214,41 @@ fun SettingsScreen(
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Karta: Powiadomienia o awarii serwera
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = SlateSurface),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, SlateBorder)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Notifications, contentDescription = null, tint = CyanAccent)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Powiadomienia o awarii serwera", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
+                        Text(
+                            text = "Sprawdzanie dostępności SSH w tle co 15 minut.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = state.monitorEnabled,
+                        onCheckedChange = { enabled ->
+                            viewModel.onMonitorEnabledChanged(enabled)
+                            if (enabled && !ServerMonitor.hasNotificationPermission(context)) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }
                     )
                 }
             }

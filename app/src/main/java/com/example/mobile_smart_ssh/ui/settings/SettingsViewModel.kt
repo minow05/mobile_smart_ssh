@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import com.example.mobile_smart_ssh.core.model.ServerConfig
 import com.example.mobile_smart_ssh.core.security.KeyManager
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
+import com.example.mobile_smart_ssh.monitor.ServerMonitor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +16,8 @@ data class SettingsUiState(
     val publicKey: String = "",
     val fingerprint: String = "",
     val isResetDialogOpen: Boolean = false,
-    val smbPasswordInput: String = ""
+    val smbPasswordInput: String = "",
+    val monitorEnabled: Boolean = true
 )
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
@@ -39,7 +41,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 config = cfg,
                 publicKey = pubKey,
                 fingerprint = fp,
-                smbPasswordInput = cfg?.smbPassword ?: ""
+                smbPasswordInput = cfg?.smbPassword ?: "",
+                monitorEnabled = ServerMonitor.isEnabled(getApplication())
             )
         }
     }
@@ -47,6 +50,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun onSmbPasswordChanged(pwd: String) {
         _uiState.update { it.copy(smbPasswordInput = pwd) }
         repository.saveSmbPassword(pwd)
+    }
+
+    fun onMonitorEnabledChanged(enabled: Boolean) {
+        ServerMonitor.setEnabled(getApplication(), enabled)
+        _uiState.update { it.copy(monitorEnabled = enabled) }
     }
 
     fun setResetDialogOpen(open: Boolean) {

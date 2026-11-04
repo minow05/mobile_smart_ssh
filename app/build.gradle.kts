@@ -70,6 +70,7 @@ dependencies {
     implementation(libs.smbj)
     implementation(libs.jsch)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.work.runtime.ktx)
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
