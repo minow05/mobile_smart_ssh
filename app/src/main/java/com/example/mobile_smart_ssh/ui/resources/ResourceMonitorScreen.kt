@@ -59,17 +59,33 @@ import com.example.mobile_smart_ssh.ui.theme.RubyRed
 import com.example.mobile_smart_ssh.ui.theme.SlateBorder
 import com.example.mobile_smart_ssh.ui.theme.SlateSurface
 import com.example.mobile_smart_ssh.ui.theme.SlateSurfaceVariant
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.mobile_smart_ssh.core.model.SystemResources
+import com.example.mobile_smart_ssh.ui.theme.SmartSSHTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ResourceMonitorScreen(
     onNavigateBack: () -> Unit,
     viewModel: ResourceMonitorViewModel = koinViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    ResourceMonitorContent(
+        state = state,
+        onAction = viewModel::onAction,
+        onNavigateBack = onNavigateBack
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ResourceMonitorContent(
+    state: ResourceMonitorUiState,
+    onAction: (ResourceMonitorAction) -> Unit,
+    onNavigateBack: () -> Unit
+) {
     val res = state.resources
 
     Scaffold(
@@ -95,7 +111,7 @@ fun ResourceMonitorScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { viewModel.onAction(ResourceMonitorAction.Refresh) },
+                        onClick = { onAction(ResourceMonitorAction.Refresh) },
                         enabled = !state.isLoading
                     ) {
                         if (state.isLoading) {
@@ -178,6 +194,39 @@ fun ResourceMonitorScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0F172A)
+@Composable
+private fun ResourceMonitorContentPreview() {
+    SmartSSHTheme(darkTheme = true) {
+        ResourceMonitorContent(
+            state = ResourceMonitorUiState(
+                resources = SystemResources(
+                    cpuPercentage = 18.4f,
+                    ramUsed = "1.2 GB",
+                    ramTotal = "4.0 GB",
+                    ramPercentage = 30.0f,
+                    diskUsed = "14.2 GB",
+                    diskTotal = "64.0 GB",
+                    diskFree = "49.8 GB",
+                    diskPercentage = 22.1f,
+                    uptime = "14 dni, 3 godz.",
+                    userQuotaUsed = "250 MB",
+                    userQuotaLimit = "10 GB",
+                    userQuotaPercentage = 2.5f,
+                    topProcesses = listOf(
+                        ProcessInfo(user = "root", pid = "540", cpuPercentage = 2.1f, memPercentage = 1.0f, command = "smbd"),
+                        ProcessInfo(user = "root", pid = "612", cpuPercentage = 1.4f, memPercentage = 0.8f, command = "sshd"),
+                        ProcessInfo(user = "minow", pid = "1204", cpuPercentage = 0.8f, memPercentage = 1.2f, command = "python3 server.py")
+                    )
+                ),
+                lastRefreshTime = System.currentTimeMillis()
+            ),
+            onAction = {},
+            onNavigateBack = {}
+        )
     }
 }
 

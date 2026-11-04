@@ -75,7 +75,9 @@ import com.example.mobile_smart_ssh.ui.theme.SlateBorder
 import com.example.mobile_smart_ssh.ui.theme.SlateSurface
 import com.example.mobile_smart_ssh.ui.theme.SlateSurfaceVariant
 
-@OptIn(ExperimentalMaterial3Api::class)
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.mobile_smart_ssh.ui.theme.SmartSSHTheme
+
 @Composable
 fun FileBrowserScreen(
     onNavigateBack: () -> Unit,
@@ -106,6 +108,24 @@ fun FileBrowserScreen(
         }
     }
 
+    FileBrowserContent(
+        state = state,
+        onAction = viewModel::onAction,
+        onNavigateBack = onNavigateBack,
+        onUploadClick = { filePickerLauncher.launch("*/*") },
+        onDownloadItem = { item -> viewModel.onAction(FileBrowserAction.DownloadFile(item, context)) }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FileBrowserContent(
+    state: FileBrowserUiState,
+    onAction: (FileBrowserAction) -> Unit,
+    onNavigateBack: () -> Unit,
+    onUploadClick: () -> Unit,
+    onDownloadItem: (RemoteFileItem) -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -126,7 +146,7 @@ fun FileBrowserScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.onAction(FileBrowserAction.LoadDirectory()) }) {
+                    IconButton(onClick = { onAction(FileBrowserAction.LoadDirectory()) }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Odśwież")
                     }
                 },
@@ -136,7 +156,7 @@ fun FileBrowserScreen(
         floatingActionButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FloatingActionButton(
-                    onClick = { viewModel.onAction(FileBrowserAction.SetCreateDirDialogVisible(true)) },
+                    onClick = { onAction(FileBrowserAction.SetCreateDirDialogVisible(true)) },
                     containerColor = SlateSurfaceVariant,
                     contentColor = Color.White
                 ) {
@@ -144,7 +164,7 @@ fun FileBrowserScreen(
                 }
 
                 FloatingActionButton(
-                    onClick = { filePickerLauncher.launch("*/*") },
+                    onClick = onUploadClick,
                     containerColor = EmeraldPrimary,
                     contentColor = Color.Black
                 ) {
@@ -162,13 +182,13 @@ fun FileBrowserScreen(
             // Zakładki wyboru udziału (Dysk Domowy [minow] vs Dysk Współdzielony [shared])
             DriveTabs(
                 selectedDrive = state.currentDrive,
-                onDriveSelected = { viewModel.onAction(FileBrowserAction.SelectDrive(it)) }
+                onDriveSelected = { onAction(FileBrowserAction.SelectDrive(it)) }
             )
 
             // Pasek ścieżki i nawigacji w górę
             PathBreadcrumbsBar(
                 currentPath = state.currentPath,
-                onNavigateUp = { viewModel.onAction(FileBrowserAction.NavigateUp) }
+                onNavigateUp = { onAction(FileBrowserAction.NavigateUp) }
             )
 
             // Pasek wskaźnika ładowania
@@ -207,13 +227,13 @@ fun FileBrowserScreen(
                             item = item,
                             onClick = {
                                 if (item.isDirectory) {
-                                    viewModel.onAction(FileBrowserAction.NavigateIntoFolder(item))
+                                    onAction(FileBrowserAction.NavigateIntoFolder(item))
                                 } else {
-                                    viewModel.onAction(FileBrowserAction.SelectItemForAction(item))
+                                    onAction(FileBrowserAction.SelectItemForAction(item))
                                 }
                             },
                             onActionClick = {
-                                viewModel.onAction(FileBrowserAction.SelectItemForAction(item))
+                                onAction(FileBrowserAction.SelectItemForAction(item))
                             }
                         )
                     }
@@ -226,13 +246,9 @@ fun FileBrowserScreen(
     state.selectedItemForAction?.let { item ->
         FileActionDialog(
             item = item,
-            onDismiss = { viewModel.onAction(FileBrowserAction.SelectItemForAction(null)) },
-            onDownload = {
-                viewModel.onAction(FileBrowserAction.DownloadFile(item, context))
-            },
-            onDelete = {
-                viewModel.onAction(FileBrowserAction.DeleteItem(item))
-            }
+            onDismiss = { onAction(FileBrowserAction.SelectItemForAction(null)) },
+            onDownload = { onDownloadItem(item) },
+            onDelete = { onAction(FileBrowserAction.DeleteItem(item)) }
         )
     }
 
@@ -240,9 +256,31 @@ fun FileBrowserScreen(
     if (state.isCreateDirDialogVisible) {
         CreateFolderDialog(
             folderName = state.newDirName,
-            onFolderNameChange = { viewModel.onAction(FileBrowserAction.SetNewDirName(it)) },
-            onDismiss = { viewModel.onAction(FileBrowserAction.SetCreateDirDialogVisible(false)) },
-            onCreate = { viewModel.onAction(FileBrowserAction.CreateDirectory(state.newDirName)) }
+            onFolderNameChange = { onAction(FileBrowserAction.SetNewDirName(it)) },
+            onDismiss = { onAction(FileBrowserAction.SetCreateDirDialogVisible(false)) },
+            onCreate = { onAction(FileBrowserAction.CreateDirectory(state.newDirName)) }
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0F172A)
+@Composable
+private fun FileBrowserContentPreview() {
+    SmartSSHTheme(darkTheme = true) {
+        FileBrowserContent(
+            state = FileBrowserUiState(
+                currentDrive = StorageDrive.HOME,
+                currentPath = "documents",
+                items = listOf(
+                    RemoteFileItem(name = "photos", path = "documents/photos", isDirectory = true, size = 0L, lastModified = 1700000000000L),
+                    RemoteFileItem(name = "thesis_draft.pdf", path = "documents/thesis_draft.pdf", isDirectory = false, size = 1048576L, lastModified = 1700000000000L),
+                    RemoteFileItem(name = "config.json", path = "documents/config.json", isDirectory = false, size = 2048L, lastModified = 1700000000000L)
+                )
+            ),
+            onAction = {},
+            onNavigateBack = {},
+            onUploadClick = {},
+            onDownloadItem = {}
         )
     }
 }

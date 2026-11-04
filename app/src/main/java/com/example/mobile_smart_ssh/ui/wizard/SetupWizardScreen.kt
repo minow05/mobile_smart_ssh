@@ -67,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.koin.androidx.compose.koinViewModel
@@ -76,17 +77,31 @@ import com.example.mobile_smart_ssh.ui.theme.RubyRed
 import com.example.mobile_smart_ssh.ui.theme.SlateBorder
 import com.example.mobile_smart_ssh.ui.theme.SlateSurface
 import com.example.mobile_smart_ssh.ui.theme.SlateSurfaceVariant
+import com.example.mobile_smart_ssh.ui.theme.SmartSSHTheme
 import com.example.mobile_smart_ssh.ui.theme.TerminalBlack
 import com.example.mobile_smart_ssh.ui.theme.TerminalCyan
 import com.example.mobile_smart_ssh.ui.theme.TerminalGreen
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SetupWizardScreen(
     onFinished: () -> Unit,
     viewModel: WizardViewModel = koinViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    SetupWizardContent(
+        state = state,
+        onAction = viewModel::onAction,
+        onFinished = onFinished
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SetupWizardContent(
+    state: WizardUiState,
+    onAction: (WizardAction) -> Unit,
+    onFinished: () -> Unit
+) {
     val listState = rememberLazyListState()
 
     // Autoprzewijanie logów konsoli
@@ -133,12 +148,12 @@ fun SetupWizardScreen(
                 WizardStage.INPUT -> {
                     WizardInputContent(
                         state = state,
-                        onHostChange = { viewModel.onAction(WizardAction.UpdateHost(it)) },
-                        onUserChange = { viewModel.onAction(WizardAction.UpdateUsername(it)) },
-                        onPasswordChange = { viewModel.onAction(WizardAction.UpdatePassword(it)) },
-                        onUseAsSmbChange = { viewModel.onAction(WizardAction.UpdateUseAsSmbPassword(it)) },
+                        onHostChange = { onAction(WizardAction.UpdateHost(it)) },
+                        onUserChange = { onAction(WizardAction.UpdateUsername(it)) },
+                        onPasswordChange = { onAction(WizardAction.UpdatePassword(it)) },
+                        onUseAsSmbChange = { onAction(WizardAction.UpdateUseAsSmbPassword(it)) },
                         onStartSetup = {
-                            viewModel.onAction(WizardAction.StartAutomatedSetup(onFinished))
+                            onAction(WizardAction.StartAutomatedSetup(onFinished))
                         }
                     )
                 }
@@ -147,12 +162,28 @@ fun SetupWizardScreen(
                     WizardExecutionConsoleContent(
                         state = state,
                         listState = listState,
-                        onRetry = { viewModel.onAction(WizardAction.ResetToInput) },
+                        onRetry = { onAction(WizardAction.ResetToInput) },
                         onProceed = onFinished
                     )
                 }
             }
         }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0F172A)
+@Composable
+private fun SetupWizardContentPreview() {
+    SmartSSHTheme(darkTheme = true) {
+        SetupWizardContent(
+            state = WizardUiState(
+                host = "minow.rpi",
+                username = "minow",
+                currentStage = WizardStage.INPUT
+            ),
+            onAction = {},
+            onFinished = {}
+        )
     }
 }
 

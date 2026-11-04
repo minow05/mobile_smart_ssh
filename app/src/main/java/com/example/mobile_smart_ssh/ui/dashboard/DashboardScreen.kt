@@ -47,9 +47,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.koin.androidx.compose.koinViewModel
+import com.example.mobile_smart_ssh.core.model.ServerConfig
 import com.example.mobile_smart_ssh.ui.terminal.TerminalActivity
 import com.example.mobile_smart_ssh.ui.theme.CyanAccent
 import com.example.mobile_smart_ssh.ui.theme.EmeraldPrimary
@@ -58,8 +60,8 @@ import com.example.mobile_smart_ssh.ui.theme.RubyRed
 import com.example.mobile_smart_ssh.ui.theme.SlateBorder
 import com.example.mobile_smart_ssh.ui.theme.SlateSurface
 import com.example.mobile_smart_ssh.ui.theme.SlateSurfaceVariant
+import com.example.mobile_smart_ssh.ui.theme.SmartSSHTheme
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     onNavigateToTerminal: () -> Unit,
@@ -71,6 +73,32 @@ fun DashboardScreen(
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
+    DashboardContent(
+        state = state,
+        onAction = viewModel::onAction,
+        onNavigateToTerminal = {
+            context.startActivity(TerminalActivity.createIntent(context))
+        },
+        onLaunchTerminalCommand = { cmd ->
+            context.startActivity(TerminalActivity.createIntent(context, initialCommand = cmd))
+        },
+        onNavigateToFiles = onNavigateToFiles,
+        onNavigateToResources = onNavigateToResources,
+        onNavigateToSettings = onNavigateToSettings
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DashboardContent(
+    state: DashboardUiState,
+    onAction: (DashboardAction) -> Unit,
+    onNavigateToTerminal: () -> Unit,
+    onLaunchTerminalCommand: (String) -> Unit,
+    onNavigateToFiles: () -> Unit,
+    onNavigateToResources: () -> Unit,
+    onNavigateToSettings: () -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -93,7 +121,7 @@ fun DashboardScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { viewModel.onAction(DashboardAction.CheckStatus) },
+                        onClick = { onAction(DashboardAction.CheckStatus) },
                         enabled = !state.isCheckingStatus
                     ) {
                         if (state.isCheckingStatus) {
@@ -142,9 +170,7 @@ fun DashboardScreen(
                 subtitle = "Dedykowane Activity (Intent) z obsługą sesji w tle i kolorów ANSI.",
                 icon = Icons.Default.Computer,
                 iconTint = EmeraldPrimary,
-                onClick = {
-                    context.startActivity(TerminalActivity.createIntent(context))
-                }
+                onClick = onNavigateToTerminal
             )
 
             // Szybkie polecenia uruchamiane w osobnym TerminalActivity z parametrem Intent (htop, uptime, free -h)
@@ -158,9 +184,7 @@ fun DashboardScreen(
                     Card(
                         modifier = Modifier
                             .weight(1f)
-                            .clickable {
-                                context.startActivity(TerminalActivity.createIntent(context, initialCommand = cmd))
-                            },
+                            .clickable { onLaunchTerminalCommand(cmd) },
                         colors = CardDefaults.cardColors(containerColor = SlateSurfaceVariant),
                         shape = RoundedCornerShape(8.dp)
                     ) {
@@ -212,6 +236,26 @@ fun DashboardScreen(
                 onClick = onNavigateToSettings
             )
         }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0F172A)
+@Composable
+private fun DashboardContentPreview() {
+    SmartSSHTheme(darkTheme = true) {
+        DashboardContent(
+            state = DashboardUiState(
+                config = ServerConfig(host = "minow.rpi", port = 22, username = "minow"),
+                isHostOnline = true,
+                isCheckingStatus = false
+            ),
+            onAction = {},
+            onNavigateToTerminal = {},
+            onLaunchTerminalCommand = {},
+            onNavigateToFiles = {},
+            onNavigateToResources = {},
+            onNavigateToSettings = {}
+        )
     }
 }
 

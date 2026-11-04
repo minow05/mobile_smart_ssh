@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -53,27 +52,43 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.koin.androidx.compose.koinViewModel
+import com.example.mobile_smart_ssh.core.model.TerminalLine
 import com.example.mobile_smart_ssh.ui.theme.CyanAccent
 import com.example.mobile_smart_ssh.ui.theme.EmeraldPrimary
 import com.example.mobile_smart_ssh.ui.theme.RubyRed
 import com.example.mobile_smart_ssh.ui.theme.SlateBorder
 import com.example.mobile_smart_ssh.ui.theme.SlateSurface
 import com.example.mobile_smart_ssh.ui.theme.SlateSurfaceVariant
+import com.example.mobile_smart_ssh.ui.theme.SmartSSHTheme
 import com.example.mobile_smart_ssh.ui.theme.TerminalBlack
 import com.example.mobile_smart_ssh.ui.theme.TerminalCyan
 import com.example.mobile_smart_ssh.ui.theme.TerminalGreen
 import com.example.mobile_smart_ssh.ui.theme.TerminalYellow
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TerminalScreen(
     onNavigateBack: () -> Unit,
     viewModel: TerminalViewModel = koinViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    TerminalContent(
+        state = state,
+        onAction = viewModel::onAction,
+        onNavigateBack = onNavigateBack
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TerminalContent(
+    state: TerminalUiState,
+    onAction: (TerminalAction) -> Unit,
+    onNavigateBack: () -> Unit
+) {
     val listState = rememberLazyListState()
 
     // Automatyczne przewijanie do najnowszych linii terminala
@@ -123,7 +138,7 @@ fun TerminalScreen(
                     }
 
                     IconButton(
-                        onClick = { viewModel.onAction(TerminalAction.Connect) },
+                        onClick = { onAction(TerminalAction.Connect) },
                         enabled = !state.isConnecting
                     ) {
                         if (state.isConnecting) {
@@ -147,7 +162,7 @@ fun TerminalScreen(
         ) {
             // Pasek szybkich komend (Quick Actions)
             QuickCommandChips(
-                onSelectCommand = { cmd -> viewModel.onAction(TerminalAction.SendCommand(cmd)) }
+                onSelectCommand = { cmd -> onAction(TerminalAction.SendCommand(cmd)) }
             )
 
             // Konsola terminala (Czarny ekran z czcionką monospaced)
@@ -194,12 +209,12 @@ fun TerminalScreen(
             ) {
                 OutlinedTextField(
                     value = state.currentCommandInput,
-                    onValueChange = { viewModel.onAction(TerminalAction.UpdateInput(it)) },
+                    onValueChange = { onAction(TerminalAction.UpdateInput(it)) },
                     placeholder = { Text("Wpisz polecenie...", fontSize = 13.sp) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(
-                        onSend = { viewModel.onAction(TerminalAction.SendCommand()) }
+                        onSend = { onAction(TerminalAction.SendCommand()) }
                     ),
                     modifier = Modifier.weight(1f),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -215,9 +230,9 @@ fun TerminalScreen(
                 IconButton(
                     onClick = {
                         if (state.isExecuting) {
-                            viewModel.onAction(TerminalAction.CancelCommand)
+                            onAction(TerminalAction.CancelCommand)
                         } else {
-                            viewModel.onAction(TerminalAction.SendCommand())
+                            onAction(TerminalAction.SendCommand())
                         }
                     },
                     modifier = Modifier
@@ -279,5 +294,25 @@ private fun QuickCommandChips(onSelectCommand: (String) -> Unit) {
                 )
             )
         }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0F172A)
+@Composable
+private fun TerminalContentPreview() {
+    SmartSSHTheme(darkTheme = true) {
+        TerminalContent(
+            state = TerminalUiState(
+                isConnected = true,
+                lines = listOf(
+                    TerminalLine(text = "minow@raspberrypi:~$ uname -a", isCommand = true),
+                    TerminalLine(text = "Linux raspberrypi 6.1.0-rpi7-rpi-v8 #1 SMP PREEMPT Debian 1:6.1.63-1+rpt1 aarch64"),
+                    TerminalLine(text = "minow@raspberrypi:~$ uptime", isCommand = true),
+                    TerminalLine(text = " 16:30:12 up 14 days,  3:45,  2 users,  load average: 0.12, 0.08, 0.05")
+                )
+            ),
+            onAction = {},
+            onNavigateBack = {}
+        )
     }
 }

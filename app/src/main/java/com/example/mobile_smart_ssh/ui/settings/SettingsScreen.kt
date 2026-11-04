@@ -66,6 +66,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.koin.androidx.compose.koinViewModel
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.mobile_smart_ssh.core.model.ServerConfig
 import com.example.mobile_smart_ssh.ui.theme.CyanAccent
 import com.example.mobile_smart_ssh.ui.theme.EmeraldPrimary
 import com.example.mobile_smart_ssh.ui.theme.RubyRed
@@ -73,8 +75,8 @@ import com.example.mobile_smart_ssh.ui.theme.SlateBorder
 import com.example.mobile_smart_ssh.ui.theme.SlateSurface
 import com.example.mobile_smart_ssh.ui.theme.SlateSurfaceVariant
 import com.example.mobile_smart_ssh.ui.theme.TerminalBlack
+import com.example.mobile_smart_ssh.ui.theme.SmartSSHTheme
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
@@ -102,6 +104,31 @@ fun SettingsScreen(
         }
     }
 
+    SettingsContent(
+        state = state,
+        onAction = viewModel::onAction,
+        onNavigateBack = onNavigateBack,
+        onResetToWizard = onResetToWizard,
+        onCopyPublicKey = {
+            clipboardManager.setText(AnnotatedString(state.publicKey))
+            Toast.makeText(context, "Klucz publiczny skopiowany do schowka!", Toast.LENGTH_SHORT).show()
+        },
+        onRequestNotificationPermission = {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsContent(
+    state: SettingsUiState,
+    onAction: (SettingsAction) -> Unit,
+    onNavigateBack: () -> Unit,
+    onResetToWizard: () -> Unit,
+    onCopyPublicKey: () -> Unit,
+    onRequestNotificationPermission: () -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -186,10 +213,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Button(
-                        onClick = {
-                            clipboardManager.setText(AnnotatedString(state.publicKey))
-                            Toast.makeText(context, "Klucz publiczny skopiowany do schowka!", Toast.LENGTH_SHORT).show()
-                        },
+                        onClick = onCopyPublicKey,
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = SlateSurfaceVariant)
                     ) {
@@ -227,7 +251,7 @@ fun SettingsScreen(
 
                     OutlinedTextField(
                         value = state.smbPasswordInput,
-                        onValueChange = { viewModel.onAction(SettingsAction.UpdateSmbPassword(it)) },
+                        onValueChange = { onAction(SettingsAction.UpdateSmbPassword(it)) },
                         label = { Text("Hasło Samba") },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
@@ -263,9 +287,9 @@ fun SettingsScreen(
                         Switch(
                             checked = state.monitorEnabled,
                             onCheckedChange = { enabled ->
-                                viewModel.onAction(SettingsAction.ToggleMonitor(enabled))
+                                onAction(SettingsAction.ToggleMonitor(enabled))
                                 if (enabled && !state.hasNotificationPermission) {
-                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    onRequestNotificationPermission()
                                 }
                             }
                         )
@@ -283,9 +307,9 @@ fun SettingsScreen(
                             OutlinedButton(
                                 onClick = {
                                     if (!state.hasNotificationPermission) {
-                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                        onRequestNotificationPermission()
                                     } else {
-                                        viewModel.onAction(SettingsAction.SendTestNotification)
+                                        onAction(SettingsAction.SendTestNotification)
                                     }
                                 },
                                 modifier = Modifier.weight(1f)
@@ -297,7 +321,7 @@ fun SettingsScreen(
 
                             OutlinedButton(
                                 onClick = {
-                                    viewModel.onAction(SettingsAction.TriggerImmediateCheck)
+                                    onAction(SettingsAction.TriggerImmediateCheck)
                                 },
                                 modifier = Modifier.weight(1f)
                             ) {
@@ -344,7 +368,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Button(
-                        onClick = { viewModel.onAction(SettingsAction.SetResetDialogOpen(true)) },
+                        onClick = { onAction(SettingsAction.SetResetDialogOpen(true)) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = RubyRed, contentColor = Color.White)
                     ) {
@@ -362,7 +386,7 @@ fun SettingsScreen(
     // Modalne potwierdzenie resetu konfiguracji
     if (state.isResetDialogOpen) {
         AlertDialog(
-            onDismissRequest = { viewModel.onAction(SettingsAction.SetResetDialogOpen(false)) },
+            onDismissRequest = { onAction(SettingsAction.SetResetDialogOpen(false)) },
             title = { Text("Zresetować powiązanie hosta?") },
             text = {
                 Text(
@@ -374,7 +398,7 @@ fun SettingsScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.onAction(SettingsAction.ResetConfiguration(onResetToWizard))
+                        onAction(SettingsAction.ResetConfiguration(onResetToWizard))
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = RubyRed, contentColor = Color.White)
                 ) {
@@ -382,10 +406,31 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.onAction(SettingsAction.SetResetDialogOpen(false)) }) {
+                TextButton(onClick = { onAction(SettingsAction.SetResetDialogOpen(false)) }) {
                     Text("Anuluj")
                 }
             }
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0F172A)
+@Composable
+private fun SettingsContentPreview() {
+    SmartSSHTheme(darkTheme = true) {
+        SettingsContent(
+            state = SettingsUiState(
+                config = ServerConfig(host = "192.168.1.100", port = 22, username = "minow"),
+                publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... minow@smartssh",
+                fingerprint = "SHA256:d8a2f...1a",
+                monitorEnabled = true,
+                hasNotificationPermission = true
+            ),
+            onAction = {},
+            onNavigateBack = {},
+            onResetToWizard = {},
+            onCopyPublicKey = {},
+            onRequestNotificationPermission = {}
         )
     }
 }
