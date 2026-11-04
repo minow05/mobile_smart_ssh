@@ -15,6 +15,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
 import com.example.mobile_smart_ssh.monitor.ServerMonitor
+import com.example.mobile_smart_ssh.network.ssh.SSHSessionManager
 import com.example.mobile_smart_ssh.ui.dashboard.DashboardScreen
 import com.example.mobile_smart_ssh.ui.files.FileBrowserActivity
 import com.example.mobile_smart_ssh.ui.resources.ResourceMonitorActivity
@@ -37,6 +38,7 @@ class MainActivity : ComponentActivity() {
 
     private val serverMonitor: ServerMonitor by inject()
     private val repository: ConfigRepository by inject()
+    private val sessionManager: SSHSessionManager by inject()
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -58,6 +60,9 @@ class MainActivity : ComponentActivity() {
             finish()
             return
         }
+
+        // Natychmiastowe nawiązanie trwałej sesji SSH w tle przy starcie aplikacji (odpowiednik m_session z desktopu)
+        sessionManager.ensureConnected(forceReconnect = false)
 
         // Harmonogram monitora zasobów w tle
         if (serverMonitor.isEnabled()) {
