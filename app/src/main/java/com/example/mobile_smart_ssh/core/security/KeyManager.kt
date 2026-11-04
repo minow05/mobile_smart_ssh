@@ -1,6 +1,6 @@
 package com.example.mobile_smart_ssh.core.security
 
-import android.util.Base64
+import java.util.Base64
 import org.bouncycastle.crypto.generators.Ed25519KeyPairGenerator
 import org.bouncycastle.crypto.params.Ed25519KeyGenerationParameters
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
@@ -46,13 +46,13 @@ object KeyManager {
 
         // 1. Formatowanie klucza publicznego OpenSSH
         val pubBytes = OpenSSHPublicKeyUtil.encodePublicKey(pubParams)
-        val pubBase64 = Base64.encodeToString(pubBytes, Base64.NO_WRAP)
+        val pubBase64 = Base64.getEncoder().encodeToString(pubBytes)
         val comment = "$username@smartssh-mobile"
         val publicKeyString = "$KEY_TYPE $pubBase64 $comment"
 
         // 2. Formatowanie klucza prywatnego OpenSSH (nagłówek i stopka OpenSSH)
         val privBytes = OpenSSHPrivateKeyUtil.encodePrivateKey(privParams)
-        val privBase64 = Base64.encodeToString(privBytes, Base64.NO_WRAP)
+        val privBase64 = Base64.getEncoder().encodeToString(privBytes)
         val privateKeyPem = buildString {
             appendLine("-----BEGIN OPENSSH PRIVATE KEY-----")
             privBase64.chunked(70).forEach { appendLine(it) }
@@ -78,7 +78,7 @@ object KeyManager {
         return try {
             val parts = publicKeyString.trim().split("\\s+".toRegex())
             if (parts.size >= 2) {
-                val pubBytes = Base64.decode(parts[1], Base64.DEFAULT)
+                val pubBytes = Base64.getDecoder().decode(parts[1])
                 calculateFingerprintBytes(pubBytes)
             } else {
                 "Nieprawidłowy format"
@@ -91,7 +91,7 @@ object KeyManager {
     private fun calculateFingerprintBytes(publicKeyBytes: ByteArray): String {
         val md = MessageDigest.getInstance("SHA-256")
         val digest = md.digest(publicKeyBytes)
-        val base64 = Base64.encodeToString(digest, Base64.NO_WRAP).trimEnd('=')
+        val base64 = Base64.getEncoder().withoutPadding().encodeToString(digest)
         return "SHA256:$base64"
     }
 
@@ -106,7 +106,7 @@ object KeyManager {
         val parts = trimmed.split("\\s+".toRegex())
         if (parts.size < 2) return false
         return try {
-            Base64.decode(parts[1], Base64.DEFAULT).isNotEmpty()
+            Base64.getDecoder().decode(parts[1]).isNotEmpty()
         } catch (_: Exception) {
             false
         }

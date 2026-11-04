@@ -1,13 +1,13 @@
 package com.example.mobile_smart_ssh.ui.wizard
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mobile_smart_ssh.core.model.ServerConfig
 import com.example.mobile_smart_ssh.core.security.KeyManager
 import com.example.mobile_smart_ssh.core.security.SshKeyPair
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
 import com.example.mobile_smart_ssh.network.ssh.SSHManager
+import com.example.mobile_smart_ssh.network.ssh.SSHSessionManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -47,9 +47,20 @@ data class WizardUiState(
     val keyPair: SshKeyPair? = null
 )
 
-class WizardViewModel(application: Application) : AndroidViewModel(application) {
+sealed interface WizardAction {
+    data class UpdateHost(val host: String) : WizardAction
+    data class UpdatePort(val port: String) : WizardAction
+    data class UpdateUsername(val username: String) : WizardAction
+    data class UpdatePassword(val password: String) : WizardAction
+    data class UpdateUseAsSmbPassword(val use: Boolean) : WizardAction
+    data object ResetToInput : WizardAction
+    data class StartAutomatedSetup(val onFinished: () -> Unit) : WizardAction
+}
 
-    private val repository = ConfigRepository.getInstance(application)
+class WizardViewModel(
+    private val repository: ConfigRepository,
+    private val sessionManager: SSHSessionManager
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WizardUiState())
     val uiState: StateFlow<WizardUiState> = _uiState.asStateFlow()
@@ -65,6 +76,18 @@ class WizardViewModel(application: Application) : AndroidViewModel(application) 
                     username = existing.username
                 )
             }
+        }
+    }
+
+    fun onAction(action: WizardAction) {
+        when (action) {
+            is WizardAction.UpdateHost -> onHostChanged(action.host)
+            is WizardAction.UpdatePort -> onPortChanged(action.port)
+            is WizardAction.UpdateUsername -> onUsernameChanged(action.username)
+            is WizardAction.UpdatePassword -> onPasswordChanged(action.password)
+            is WizardAction.UpdateUseAsSmbPassword -> onUseAsSmbPasswordChanged(action.use)
+            WizardAction.ResetToInput -> resetToInput()
+            is WizardAction.StartAutomatedSetup -> startAutomatedSetup(action.onFinished)
         }
     }
 
@@ -240,6 +263,7 @@ class WizardViewModel(application: Application) : AndroidViewModel(application) 
             repository.saveConfig(config)
             repository.savePrivateKey(keyPair.privateKeyPem)
             repository.savePublicKey(keyPair.publicKey)
+            sessionManager.ensureConnected(forceReconnect = true)
 
             addLog("[+] Single-Host Binding zapisany pomyślnie w bezpiecznym magazynie!", LogType.SUCCESS)
             addLog("========================================================", LogType.HEADER)

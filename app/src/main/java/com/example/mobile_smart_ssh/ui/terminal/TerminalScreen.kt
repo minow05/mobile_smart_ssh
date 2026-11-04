@@ -55,7 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import org.koin.androidx.compose.koinViewModel
 import com.example.mobile_smart_ssh.ui.theme.CyanAccent
 import com.example.mobile_smart_ssh.ui.theme.EmeraldPrimary
 import com.example.mobile_smart_ssh.ui.theme.RubyRed
@@ -71,7 +71,7 @@ import com.example.mobile_smart_ssh.ui.theme.TerminalYellow
 @Composable
 fun TerminalScreen(
     onNavigateBack: () -> Unit,
-    viewModel: TerminalViewModel = viewModel()
+    viewModel: TerminalViewModel = koinViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
@@ -123,7 +123,7 @@ fun TerminalScreen(
                     }
 
                     IconButton(
-                        onClick = viewModel::connectToTerminal,
+                        onClick = { viewModel.onAction(TerminalAction.Connect) },
                         enabled = !state.isConnecting
                     ) {
                         if (state.isConnecting) {
@@ -147,7 +147,7 @@ fun TerminalScreen(
         ) {
             // Pasek szybkich komend (Quick Actions)
             QuickCommandChips(
-                onSelectCommand = { cmd -> viewModel.sendCommand(cmd) }
+                onSelectCommand = { cmd -> viewModel.onAction(TerminalAction.SendCommand(cmd)) }
             )
 
             // Konsola terminala (Czarny ekran z czcionką monospaced)
@@ -194,12 +194,12 @@ fun TerminalScreen(
             ) {
                 OutlinedTextField(
                     value = state.currentCommandInput,
-                    onValueChange = viewModel::onCommandInputChanged,
+                    onValueChange = { viewModel.onAction(TerminalAction.UpdateInput(it)) },
                     placeholder = { Text("Wpisz polecenie...", fontSize = 13.sp) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(
-                        onSend = { viewModel.sendCommand() }
+                        onSend = { viewModel.onAction(TerminalAction.SendCommand()) }
                     ),
                     modifier = Modifier.weight(1f),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -215,9 +215,9 @@ fun TerminalScreen(
                 IconButton(
                     onClick = {
                         if (state.isExecuting) {
-                            viewModel.cancelCurrentCommand()
+                            viewModel.onAction(TerminalAction.CancelCommand)
                         } else {
-                            viewModel.sendCommand()
+                            viewModel.onAction(TerminalAction.SendCommand())
                         }
                     },
                     modifier = Modifier

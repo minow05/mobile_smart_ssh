@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -36,9 +38,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -47,6 +51,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -60,7 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import org.koin.androidx.compose.koinViewModel
 import com.example.mobile_smart_ssh.monitor.ServerMonitor
 import com.example.mobile_smart_ssh.ui.theme.CyanAccent
 import com.example.mobile_smart_ssh.ui.theme.EmeraldPrimary
@@ -75,14 +80,28 @@ import com.example.mobile_smart_ssh.ui.theme.TerminalBlack
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onResetToWizard: () -> Unit,
-    viewModel: SettingsViewModel = viewModel()
+    viewModel: SettingsViewModel = koinViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) {}
+    ) { isGranted ->
+        if (isGranted) {
+            Toast.makeText(context, "Uprawnienie do powiadomień przyznane!", Toast.LENGTH_SHORT).show()
+            viewModel.onAction(SettingsAction.SendTestNotification)
+        } else {
+            Toast.makeText(context, "Brak uprawnienia do powiadomień. Włącz w ustawieniach telefonu.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    LaunchedEffect(state.statusMessage) {
+        state.statusMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            viewModel.onAction(SettingsAction.ClearStatusMessage)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -209,7 +228,7 @@ fun SettingsScreen(
 
                     OutlinedTextField(
                         value = state.smbPasswordInput,
-                        onValueChange = viewModel::onSmbPasswordChanged,
+                        onValueChange = { viewModel.onAction(SettingsAction.UpdateSmbPassword(it)) },
                         label = { Text("Hasło Samba") },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
@@ -227,29 +246,68 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(12.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, SlateBorder)
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Notifications, contentDescription = null, tint = CyanAccent)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Powiadomienia o awarii serwera", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
-                        Text(
-                            text = "Sprawdzanie dostępności SSH w tle co 15 minut.",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Notifications, contentDescription = null, tint = CyanAccent)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Powiadomienia o awarii serwera", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
+                            Text(
+                                text = "Sprawdzanie dostępności SSH w tle co 15 minut.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = state.monitorEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.onAction(SettingsAction.ToggleMonitor(enabled))
+                                if (enabled && !ServerMonitor.hasNotificationPermission(context)) {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            }
                         )
                     }
-                    Switch(
-                        checked = state.monitorEnabled,
-                        onCheckedChange = { enabled ->
-                            viewModel.onMonitorEnabledChanged(enabled)
-                            if (enabled && !ServerMonitor.hasNotificationPermission(context)) {
-                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+
+                    if (state.monitorEnabled) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = SlateBorder)
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    if (!ServerMonitor.hasNotificationPermission(context)) {
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    } else {
+                                        viewModel.onAction(SettingsAction.SendTestNotification)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(16.dp), tint = CyanAccent)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Test powiadomienia", fontSize = 11.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.onAction(SettingsAction.TriggerImmediateCheck)
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp), tint = EmeraldPrimary)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Sprawdź serwer teraz", fontSize = 11.sp)
                             }
                         }
-                    )
+                    }
                 }
             }
 
@@ -287,7 +345,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Button(
-                        onClick = { viewModel.setResetDialogOpen(true) },
+                        onClick = { viewModel.onAction(SettingsAction.SetResetDialogOpen(true)) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = RubyRed, contentColor = Color.White)
                     ) {
@@ -305,7 +363,7 @@ fun SettingsScreen(
     // Modalne potwierdzenie resetu konfiguracji
     if (state.isResetDialogOpen) {
         AlertDialog(
-            onDismissRequest = { viewModel.setResetDialogOpen(false) },
+            onDismissRequest = { viewModel.onAction(SettingsAction.SetResetDialogOpen(false)) },
             title = { Text("Zresetować powiązanie hosta?") },
             text = {
                 Text(
@@ -317,7 +375,7 @@ fun SettingsScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.resetConfiguration(onResetToWizard)
+                        viewModel.onAction(SettingsAction.ResetConfiguration(onResetToWizard))
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = RubyRed, contentColor = Color.White)
                 ) {
@@ -325,7 +383,7 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.setResetDialogOpen(false) }) {
+                TextButton(onClick = { viewModel.onAction(SettingsAction.SetResetDialogOpen(false)) }) {
                     Text("Anuluj")
                 }
             }

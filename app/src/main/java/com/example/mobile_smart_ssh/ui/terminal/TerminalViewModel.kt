@@ -1,11 +1,10 @@
 package com.example.mobile_smart_ssh.ui.terminal
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mobile_smart_ssh.core.model.TerminalLine
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
-import com.example.mobile_smart_ssh.network.ssh.SSHManager
+import com.example.mobile_smart_ssh.network.ssh.SSHSessionManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,84 +22,53 @@ data class TerminalUiState(
     val prompt: String = "minow@raspberrypi:~$"
 )
 
-class TerminalViewModel(application: Application) : AndroidViewModel(application) {
+sealed interface TerminalAction {
+    data class UpdateInput(val input: String) : TerminalAction
+    data class SendCommand(val command: String? = null) : TerminalAction
+    data object CancelCommand : TerminalAction
+    data object Connect : TerminalAction
+}
 
-    private val repository = ConfigRepository.getInstance(application)
-    private var terminalSession: SSHManager.TerminalSession? = null
-    private var currentCommandJob: Job? = null
+class TerminalViewModel(
+    private val repository: ConfigRepository,
+    private val sessionManager: SSHSessionManager
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TerminalUiState())
     val uiState: StateFlow<TerminalUiState> = _uiState.asStateFlow()
 
+    private var currentCommandJob: Job? = null
+
     init {
-        connectToTerminal()
+        // Obserwuj trwały stan sesji z SSHSessionManager (jak w wersji desktopowej)
+        viewModelScope.launch {
+            sessionManager.state.collect { sessionState ->
+                _uiState.update { current ->
+                    current.copy(
+                        lines = sessionState.lines,
+                        isConnecting = sessionState.isConnecting,
+                        isConnected = sessionState.isConnected,
+                        prompt = sessionState.prompt,
+                        error = sessionState.error
+                    )
+                }
+            }
+        }
+        // Upewnij się, że sesja jest połączona. Jeśli połączyła się na starcie aplikacji, używa jej natychmiast!
+        sessionManager.ensureConnected(forceReconnect = false)
+    }
+
+    fun onAction(action: TerminalAction) {
+        when (action) {
+            is TerminalAction.UpdateInput -> onCommandInputChanged(action.input)
+            is TerminalAction.SendCommand -> sendCommand(action.command ?: _uiState.value.currentCommandInput)
+            TerminalAction.CancelCommand -> cancelCurrentCommand()
+            TerminalAction.Connect -> sessionManager.ensureConnected(forceReconnect = true)
+        }
     }
 
     fun onCommandInputChanged(input: String) {
         _uiState.update { it.copy(currentCommandInput = input) }
-    }
-
-    fun connectToTerminal() {
-        val config = repository.loadConfig()
-        val privateKey = repository.getPrivateKey()
-
-        if (config == null || privateKey.isNullOrBlank()) {
-            _uiState.update {
-                it.copy(
-                    error = "Brak konfiguracji powiązanego hosta lub klucza prywatnego.",
-                    lines = it.lines + TerminalLine("Błąd: brak klucza SSH", isError = true)
-                )
-            }
-            return
-        }
-
-        val initialPrompt = "${config.username}@${config.host}:~$"
-        _uiState.update {
-            it.copy(
-                isConnecting = true,
-                prompt = initialPrompt,
-                lines = it.lines + TerminalLine("Łączenie z ${config.host} przez SSH (Ed25519)...")
-            )
-        }
-
-        viewModelScope.launch {
-            terminalSession?.disconnect()
-            val session = SSHManager.createTerminalSession(
-                host = config.host,
-                port = config.port,
-                username = config.username,
-                privateKeyPem = privateKey
-            )
-            terminalSession = session
-
-            val connectResult = session.connect()
-            connectResult.fold(
-                onSuccess = { banner ->
-                    val prompt = computePrompt(config.username, config.host, session.currentDirectory)
-                    _uiState.update {
-                        it.copy(
-                            isConnecting = false,
-                            isConnected = true,
-                            prompt = prompt,
-                            lines = it.lines + listOf(
-                                TerminalLine("Połączono z ${config.username}@${config.host} ($banner)"),
-                                TerminalLine("Wpisz polecenie lub wybierz z listy poniżej.")
-                            )
-                        )
-                    }
-                },
-                onFailure = { err ->
-                    _uiState.update {
-                        it.copy(
-                            isConnecting = false,
-                            isConnected = false,
-                            error = err.message,
-                            lines = it.lines + TerminalLine("Błąd połączenia SSH: ${err.message}", isError = true)
-                        )
-                    }
-                }
-            )
-        }
     }
 
     fun sendCommand(cmd: String = _uiState.value.currentCommandInput) {
@@ -108,18 +76,13 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
         if (trimmed.isEmpty()) return
 
         if (trimmed == "clear") {
-            _uiState.update { it.copy(lines = emptyList(), currentCommandInput = "") }
+            sessionManager.clearLines()
+            _uiState.update { it.copy(currentCommandInput = "") }
             return
         }
 
-        val config = repository.loadConfig()
-        val session = terminalSession
-        if (session == null || !_uiState.value.isConnected) {
-            _uiState.update {
-                it.copy(
-                    lines = it.lines + TerminalLine("Brak połączenia z terminalem. Spróbuj połączyć ponownie.", isError = true)
-                )
-            }
+        if (!_uiState.value.isConnected) {
+            sessionManager.addLine(TerminalLine("Brak połączenia z terminalem. Spróbuj połączyć ponownie.", isError = true))
             return
         }
 
@@ -127,79 +90,39 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
         _uiState.update {
             it.copy(
                 currentCommandInput = "",
-                isExecuting = true,
-                lines = it.lines + TerminalLine(text = "$currentPrompt $trimmed", isCommand = true)
+                isExecuting = true
             )
         }
+        sessionManager.addLine(TerminalLine(text = "$currentPrompt $trimmed", isCommand = true))
 
         currentCommandJob = viewModelScope.launch {
-            val result = session.executeCommand(trimmed) { line, isError ->
-                val cleanLine = stripAnsiCodes(line)
+            val result = sessionManager.executeCommand(trimmed) { line, isError ->
+                val cleanLine = TerminalFormatter.stripAnsiCodes(line)
                 if (cleanLine.isNotBlank() || !isError) {
-                    _uiState.update { state ->
-                        state.copy(
-                            lines = (state.lines + TerminalLine(cleanLine, isError = isError)).takeLast(1000)
-                        )
-                    }
+                    sessionManager.addLine(TerminalLine(cleanLine, isError = isError))
                 }
             }
 
             result.fold(
-                onSuccess = { exitStatus ->
-                    val user = config?.username ?: "minow"
-                    val host = config?.host ?: "rpi"
-                    val updatedPrompt = computePrompt(user, host, session.currentDirectory)
-                    _uiState.update {
-                        it.copy(
-                            isExecuting = false,
-                            prompt = updatedPrompt
-                        )
-                    }
+                onSuccess = {
+                    _uiState.update { it.copy(isExecuting = false) }
                 },
                 onFailure = { err ->
-                    _uiState.update {
-                        it.copy(
-                            isExecuting = false,
-                            lines = (it.lines + TerminalLine("Błąd: ${err.message}", isError = true)).takeLast(1000)
-                        )
-                    }
+                    sessionManager.addLine(TerminalLine("Błąd: ${err.message}", isError = true))
+                    _uiState.update { it.copy(isExecuting = false) }
                 }
             )
         }
     }
 
     fun cancelCurrentCommand() {
-        terminalSession?.cancelCurrentCommand()
+        sessionManager.cancelCurrentCommand()
         currentCommandJob?.cancel()
-        _uiState.update {
-            it.copy(
-                isExecuting = false,
-                lines = it.lines + TerminalLine("^C (Zatrzymano)", isError = true)
-            )
-        }
-    }
-
-    private fun computePrompt(user: String, host: String, rawDir: String): String {
-        val homeDir = "/home/$user"
-        val displayDir = when {
-            rawDir == homeDir || rawDir == "~" -> "~"
-            rawDir.startsWith("$homeDir/") -> "~" + rawDir.removePrefix(homeDir)
-            else -> rawDir
-        }
-        return "$user@$host:$displayDir$"
-    }
-
-    private fun stripAnsiCodes(input: String): String {
-        return input
-            .replace(Regex("\u001B\\[[;?0-9]*[a-zA-Z]"), "")
-            .replace(Regex("\u001B\\][^\u0007\u001B]*(\u0007|\u001B\\\\)"), "")
-            .replace(Regex("\u001B[()][A-Za-z0-9]"), "")
-            .replace(Regex("\u001B[=>]"), "")
-            .replace("\r", "")
+        _uiState.update { it.copy(isExecuting = false) }
     }
 
     override fun onCleared() {
         super.onCleared()
-        terminalSession?.disconnect()
+        // Trwała sesja SSH pozostaje aktywna w tle w SSHSessionManager (nie rozłączamy jej przy wyjściu z ekranu)
     }
 }

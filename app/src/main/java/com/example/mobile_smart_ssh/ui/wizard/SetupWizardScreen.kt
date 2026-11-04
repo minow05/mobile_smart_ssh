@@ -69,7 +69,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import org.koin.androidx.compose.koinViewModel
 import com.example.mobile_smart_ssh.ui.theme.CyanAccent
 import com.example.mobile_smart_ssh.ui.theme.EmeraldPrimary
 import com.example.mobile_smart_ssh.ui.theme.RubyRed
@@ -84,7 +84,7 @@ import com.example.mobile_smart_ssh.ui.theme.TerminalGreen
 @Composable
 fun SetupWizardScreen(
     onFinished: () -> Unit,
-    viewModel: WizardViewModel = viewModel()
+    viewModel: WizardViewModel = koinViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
@@ -133,12 +133,12 @@ fun SetupWizardScreen(
                 WizardStage.INPUT -> {
                     WizardInputContent(
                         state = state,
-                        onHostChange = viewModel::onHostChanged,
-                        onUserChange = viewModel::onUsernameChanged,
-                        onPasswordChange = viewModel::onPasswordChanged,
-                        onUseAsSmbChange = viewModel::onUseAsSmbPasswordChanged,
+                        onHostChange = { viewModel.onAction(WizardAction.UpdateHost(it)) },
+                        onUserChange = { viewModel.onAction(WizardAction.UpdateUsername(it)) },
+                        onPasswordChange = { viewModel.onAction(WizardAction.UpdatePassword(it)) },
+                        onUseAsSmbChange = { viewModel.onAction(WizardAction.UpdateUseAsSmbPassword(it)) },
                         onStartSetup = {
-                            viewModel.startAutomatedSetup(onFinished)
+                            viewModel.onAction(WizardAction.StartAutomatedSetup(onFinished))
                         }
                     )
                 }
@@ -147,7 +147,7 @@ fun SetupWizardScreen(
                     WizardExecutionConsoleContent(
                         state = state,
                         listState = listState,
-                        onRetry = viewModel::resetToInput,
+                        onRetry = { viewModel.onAction(WizardAction.ResetToInput) },
                         onProceed = onFinished
                     )
                 }

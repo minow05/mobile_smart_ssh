@@ -1,11 +1,11 @@
 package com.example.mobile_smart_ssh.ui.dashboard
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mobile_smart_ssh.core.model.ServerConfig
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
 import com.example.mobile_smart_ssh.network.ssh.SSHManager
+import com.example.mobile_smart_ssh.network.ssh.SSHSessionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,9 +20,15 @@ data class DashboardUiState(
     val quickUptime: String = ""
 )
 
-class DashboardViewModel(application: Application) : AndroidViewModel(application) {
+sealed interface DashboardAction {
+    data object Refresh : DashboardAction
+    data object CheckStatus : DashboardAction
+}
 
-    private val repository = ConfigRepository.getInstance(application)
+class DashboardViewModel(
+    private val repository: ConfigRepository,
+    private val sessionManager: SSHSessionManager
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
@@ -31,11 +37,20 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         loadConfigAndCheckStatus()
     }
 
+    fun onAction(action: DashboardAction) {
+        when (action) {
+            DashboardAction.Refresh -> loadConfigAndCheckStatus()
+            DashboardAction.CheckStatus -> checkHostStatus()
+        }
+    }
+
     fun loadConfigAndCheckStatus() {
         val cfg = repository.loadConfig()
         _uiState.update { it.copy(config = cfg) }
 
         if (cfg != null) {
+            // Nawiązanie trwałej sesji SSH w tle już na starcie aplikacji (jak w wersji desktopowej)
+            sessionManager.ensureConnected(forceReconnect = false)
             checkHostStatus()
         }
     }
@@ -44,7 +59,11 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         val cfg = _uiState.value.config ?: repository.loadConfig() ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isCheckingStatus = true) }
-            val online = SSHManager.isHostOnline(cfg.host, cfg.port, timeoutMs = 2500)
+            val online = if (sessionManager.isConnected()) {
+                true
+            } else {
+                SSHManager.isHostOnline(cfg.host, cfg.port, timeoutMs = 2500)
+            }
             _uiState.update {
                 it.copy(
                     isCheckingStatus = false,

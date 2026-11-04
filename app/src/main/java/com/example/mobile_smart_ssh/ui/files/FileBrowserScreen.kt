@@ -65,7 +65,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import org.koin.androidx.compose.koinViewModel
 import com.example.mobile_smart_ssh.core.model.RemoteFileItem
 import com.example.mobile_smart_ssh.ui.theme.AmberWarning
 import com.example.mobile_smart_ssh.ui.theme.CyanAccent
@@ -79,7 +79,7 @@ import com.example.mobile_smart_ssh.ui.theme.SlateSurfaceVariant
 @Composable
 fun FileBrowserScreen(
     onNavigateBack: () -> Unit,
-    viewModel: FileBrowserViewModel = viewModel()
+    viewModel: FileBrowserViewModel = koinViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -88,21 +88,21 @@ fun FileBrowserScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            viewModel.uploadFileFromDevice(uri, context)
+            viewModel.onAction(FileBrowserAction.UploadFile(uri, context))
         }
     }
 
     LaunchedEffect(state.statusMessage) {
         state.statusMessage?.let {
             Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-            viewModel.clearStatusMessage()
+            viewModel.onAction(FileBrowserAction.ClearStatusMessage)
         }
     }
 
     LaunchedEffect(state.error) {
         state.error?.let {
             Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-            viewModel.clearStatusMessage()
+            viewModel.onAction(FileBrowserAction.ClearStatusMessage)
         }
     }
 
@@ -126,7 +126,7 @@ fun FileBrowserScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.loadDirectory() }) {
+                    IconButton(onClick = { viewModel.onAction(FileBrowserAction.LoadDirectory()) }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Odśwież")
                     }
                 },
@@ -136,7 +136,7 @@ fun FileBrowserScreen(
         floatingActionButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FloatingActionButton(
-                    onClick = { viewModel.setCreateDirDialogVisible(true) },
+                    onClick = { viewModel.onAction(FileBrowserAction.SetCreateDirDialogVisible(true)) },
                     containerColor = SlateSurfaceVariant,
                     contentColor = Color.White
                 ) {
@@ -148,7 +148,7 @@ fun FileBrowserScreen(
                     containerColor = EmeraldPrimary,
                     contentColor = Color.Black
                 ) {
-                    Icon(Icons.Default.UploadFile, contentDescription = "Wyślij Plik")
+                    Icon(Icons.Default.UploadFile, contentDescription = "Wyślij plik")
                 }
             }
         },
@@ -162,13 +162,13 @@ fun FileBrowserScreen(
             // Zakładki wyboru udziału (Dysk Domowy [minow] vs Dysk Współdzielony [shared])
             DriveTabs(
                 selectedDrive = state.currentDrive,
-                onDriveSelected = viewModel::selectDrive
+                onDriveSelected = { viewModel.onAction(FileBrowserAction.SelectDrive(it)) }
             )
 
             // Pasek ścieżki i nawigacji w górę
             PathBreadcrumbsBar(
                 currentPath = state.currentPath,
-                onNavigateUp = viewModel::navigateUp
+                onNavigateUp = { viewModel.onAction(FileBrowserAction.NavigateUp) }
             )
 
             // Pasek wskaźnika ładowania
@@ -207,13 +207,13 @@ fun FileBrowserScreen(
                             item = item,
                             onClick = {
                                 if (item.isDirectory) {
-                                    viewModel.navigateIntoFolder(item)
+                                    viewModel.onAction(FileBrowserAction.NavigateIntoFolder(item))
                                 } else {
-                                    viewModel.selectItemForAction(item)
+                                    viewModel.onAction(FileBrowserAction.SelectItemForAction(item))
                                 }
                             },
                             onActionClick = {
-                                viewModel.selectItemForAction(item)
+                                viewModel.onAction(FileBrowserAction.SelectItemForAction(item))
                             }
                         )
                     }
@@ -226,12 +226,12 @@ fun FileBrowserScreen(
     state.selectedItemForAction?.let { item ->
         FileActionDialog(
             item = item,
-            onDismiss = { viewModel.selectItemForAction(null) },
+            onDismiss = { viewModel.onAction(FileBrowserAction.SelectItemForAction(null)) },
             onDownload = {
-                viewModel.downloadFileToDevice(item, context)
+                viewModel.onAction(FileBrowserAction.DownloadFile(item, context))
             },
             onDelete = {
-                viewModel.deleteItem(item)
+                viewModel.onAction(FileBrowserAction.DeleteItem(item))
             }
         )
     }
@@ -240,9 +240,9 @@ fun FileBrowserScreen(
     if (state.isCreateDirDialogVisible) {
         CreateFolderDialog(
             folderName = state.newDirName,
-            onFolderNameChange = viewModel::setNewDirName,
-            onDismiss = { viewModel.setCreateDirDialogVisible(false) },
-            onCreate = { viewModel.createDirectory(state.newDirName) }
+            onFolderNameChange = { viewModel.onAction(FileBrowserAction.SetNewDirName(it)) },
+            onDismiss = { viewModel.onAction(FileBrowserAction.SetCreateDirDialogVisible(false)) },
+            onCreate = { viewModel.onAction(FileBrowserAction.CreateDirectory(state.newDirName)) }
         )
     }
 }

@@ -1,7 +1,6 @@
 package com.example.mobile_smart_ssh.ui.resources
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mobile_smart_ssh.core.model.SystemResources
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
@@ -19,15 +18,25 @@ data class ResourceMonitorUiState(
     val lastRefreshTime: Long = 0L
 )
 
-class ResourceMonitorViewModel(application: Application) : AndroidViewModel(application) {
+sealed interface ResourceMonitorAction {
+    data object Refresh : ResourceMonitorAction
+}
 
-    private val repository = ConfigRepository.getInstance(application)
+class ResourceMonitorViewModel(
+    private val repository: ConfigRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ResourceMonitorUiState())
     val uiState: StateFlow<ResourceMonitorUiState> = _uiState.asStateFlow()
 
     init {
         refreshResources()
+    }
+
+    fun onAction(action: ResourceMonitorAction) {
+        when (action) {
+            ResourceMonitorAction.Refresh -> refreshResources()
+        }
     }
 
     fun refreshResources() {

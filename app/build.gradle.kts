@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -64,6 +65,13 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.security.crypto)
+
+    // Dependency Injection (Koin)
+    implementation(libs.koin.android)
+    implementation(libs.koin.androidx.compose)
+
+    // Type-safe Navigation / Serialization
+    implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.bouncycastle.bcprov)
     implementation(libs.bouncycastle.bcpkix)

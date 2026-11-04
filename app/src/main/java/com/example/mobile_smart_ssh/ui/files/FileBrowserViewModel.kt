@@ -1,11 +1,10 @@
 package com.example.mobile_smart_ssh.ui.files
 
-import android.app.Application
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import android.util.Log
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mobile_smart_ssh.core.model.RemoteFileItem
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
@@ -39,15 +38,47 @@ data class FileBrowserUiState(
     val selectedItemForAction: RemoteFileItem? = null
 )
 
-class FileBrowserViewModel(application: Application) : AndroidViewModel(application) {
+sealed interface FileBrowserAction {
+    data class SelectDrive(val drive: StorageDrive) : FileBrowserAction
+    data class SetNewDirName(val name: String) : FileBrowserAction
+    data class SetCreateDirDialogVisible(val visible: Boolean) : FileBrowserAction
+    data class SelectItemForAction(val item: RemoteFileItem?) : FileBrowserAction
+    data object ClearStatusMessage : FileBrowserAction
+    data class LoadDirectory(val relativePath: String? = null) : FileBrowserAction
+    data class NavigateIntoFolder(val item: RemoteFileItem) : FileBrowserAction
+    data object NavigateUp : FileBrowserAction
+    data class CreateDirectory(val dirName: String) : FileBrowserAction
+    data class DeleteItem(val item: RemoteFileItem) : FileBrowserAction
+    data class DownloadFile(val item: RemoteFileItem, val context: Context) : FileBrowserAction
+    data class UploadFile(val uri: Uri, val context: Context) : FileBrowserAction
+}
 
-    private val repository = ConfigRepository.getInstance(application)
+class FileBrowserViewModel(
+    private val repository: ConfigRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FileBrowserUiState())
     val uiState: StateFlow<FileBrowserUiState> = _uiState.asStateFlow()
 
     init {
         loadDirectory("")
+    }
+
+    fun onAction(action: FileBrowserAction) {
+        when (action) {
+            is FileBrowserAction.SelectDrive -> selectDrive(action.drive)
+            is FileBrowserAction.SetNewDirName -> setNewDirName(action.name)
+            is FileBrowserAction.SetCreateDirDialogVisible -> setCreateDirDialogVisible(action.visible)
+            is FileBrowserAction.SelectItemForAction -> selectItemForAction(action.item)
+            FileBrowserAction.ClearStatusMessage -> clearStatusMessage()
+            is FileBrowserAction.LoadDirectory -> loadDirectory(action.relativePath ?: _uiState.value.currentPath)
+            is FileBrowserAction.NavigateIntoFolder -> navigateIntoFolder(action.item)
+            FileBrowserAction.NavigateUp -> navigateUp()
+            is FileBrowserAction.CreateDirectory -> createDirectory(action.dirName)
+            is FileBrowserAction.DeleteItem -> deleteItem(action.item)
+            is FileBrowserAction.DownloadFile -> downloadFileToDevice(action.item, action.context)
+            is FileBrowserAction.UploadFile -> uploadFileFromDevice(action.uri, action.context)
+        }
     }
 
     fun selectDrive(drive: StorageDrive) {

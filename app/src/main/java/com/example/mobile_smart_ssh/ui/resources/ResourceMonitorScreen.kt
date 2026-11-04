@@ -49,7 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import org.koin.androidx.compose.koinViewModel
 import com.example.mobile_smart_ssh.core.model.ProcessInfo
 import com.example.mobile_smart_ssh.ui.theme.AmberWarning
 import com.example.mobile_smart_ssh.ui.theme.CyanAccent
@@ -67,7 +67,7 @@ import java.util.Locale
 @Composable
 fun ResourceMonitorScreen(
     onNavigateBack: () -> Unit,
-    viewModel: ResourceMonitorViewModel = viewModel()
+    viewModel: ResourceMonitorViewModel = koinViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     val res = state.resources
@@ -95,7 +95,7 @@ fun ResourceMonitorScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = viewModel::refreshResources,
+                        onClick = { viewModel.onAction(ResourceMonitorAction.Refresh) },
                         enabled = !state.isLoading
                     ) {
                         if (state.isLoading) {

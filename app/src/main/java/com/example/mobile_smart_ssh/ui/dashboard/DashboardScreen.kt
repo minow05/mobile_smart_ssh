@@ -48,7 +48,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import org.koin.androidx.compose.koinViewModel
 import com.example.mobile_smart_ssh.ui.theme.CyanAccent
 import com.example.mobile_smart_ssh.ui.theme.EmeraldPrimary
 import com.example.mobile_smart_ssh.ui.theme.IndigoSecondary
@@ -64,7 +64,7 @@ fun DashboardScreen(
     onNavigateToFiles: () -> Unit,
     onNavigateToResources: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    viewModel: DashboardViewModel = viewModel()
+    viewModel: DashboardViewModel = koinViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -90,7 +90,7 @@ fun DashboardScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = viewModel::checkHostStatus,
+                        onClick = { viewModel.onAction(DashboardAction.CheckStatus) },
                         enabled = !state.isCheckingStatus
                     ) {
                         if (state.isCheckingStatus) {
