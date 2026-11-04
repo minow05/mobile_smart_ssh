@@ -29,6 +29,30 @@ class MviActionTest {
 
         val connectAction = TerminalAction.Connect
         assertTrue(connectAction is TerminalAction)
+
+        val historyUp = TerminalAction.HistoryUp
+        assertTrue(historyUp is TerminalAction)
+
+        val historyDown = TerminalAction.HistoryDown
+        assertTrue(historyDown is TerminalAction)
+
+        val insertKey = TerminalAction.InsertKey("~")
+        assertEquals("~", insertKey.keyText)
+
+        val toggleCtrl = TerminalAction.ToggleCtrl
+        assertTrue(toggleCtrl is TerminalAction)
+
+        val toggleAlt = TerminalAction.ToggleAlt
+        assertTrue(toggleAlt is TerminalAction)
+
+        val tab = TerminalAction.TabComplete
+        assertTrue(tab is TerminalAction)
+
+        val clr = TerminalAction.ClearScreen
+        assertTrue(clr is TerminalAction)
+
+        val esc = TerminalAction.Escape
+        assertTrue(esc is TerminalAction)
     }
 
     @Test
