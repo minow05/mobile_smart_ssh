@@ -29,8 +29,8 @@ val appModule = module {
     // ViewModels with constructor injection (ZERO Context injected into any ViewModel!)
     viewModel { DashboardViewModel(get(), get()) }
     viewModel { TerminalViewModel(get(), get()) }
-    viewModel { ResourceMonitorViewModel(get(), get()) }
-    viewModel { FileBrowserViewModel(get(), get()) }
+    viewModel { ResourceMonitorViewModel(get()) }
+    viewModel { FileBrowserViewModel(get()) }
     viewModel { SettingsViewModel(get(), get(), get()) }
     viewModel { WizardViewModel(get(), get()) }
 }

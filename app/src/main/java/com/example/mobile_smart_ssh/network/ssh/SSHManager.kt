@@ -57,7 +57,7 @@ object SSHManager {
     /**
      * Tworzy i konfiguruje sesję JSch z uwierzytelnieniem kluczem prywatnym Ed25519.
      */
-    fun createSession(
+    private fun createSession(
         host: String,
         port: Int,
         username: String,
@@ -156,7 +156,7 @@ object SSHManager {
         }
     }
 
-    fun executeCommandOnSession(session: Session, command: String): String {
+    private fun executeCommandOnSession(session: Session, command: String): String {
         val channel = session.openChannel("exec") as ChannelExec
         channel.setCommand(command)
         channel.inputStream = null
@@ -181,91 +181,6 @@ object SSHManager {
             throw Exception("Polecenie zwróciło błąd (${channel.exitStatus}): $stderr")
         }
         return stdout
-    }
-
-    /**
-     * Błyskawiczne listowanie plików SFTP na już aktywnej, pojedynczej sesji SSH (bez ponownego łączenia).
-     */
-    fun listSftpFilesOnSession(session: Session, remotePath: String): List<RemoteFileItem> {
-        val channel = session.openChannel("sftp") as ChannelSftp
-        channel.connect(CONNECT_TIMEOUT_MS)
-        try {
-            val normalizedPath = if (remotePath.isBlank()) "." else remotePath
-            val vector = channel.ls(normalizedPath) as Vector<*>
-            val items = mutableListOf<RemoteFileItem>()
-
-            for (entry in vector) {
-                if (entry is ChannelSftp.LsEntry) {
-                    val name = entry.filename
-                    if (name == "." || name == "..") continue
-                    val attrs = entry.attrs
-                    val isDir = attrs.isDir
-                    val size = attrs.size
-                    val mtime = attrs.mTime.toLong() * 1000L
-                    val permissions = attrs.permissionsString ?: ""
-                    val fullPath = if (normalizedPath.endsWith("/")) "$normalizedPath$name" else "$normalizedPath/$name"
-
-                    items.add(
-                        RemoteFileItem(
-                            name = name,
-                            path = fullPath,
-                            isDirectory = isDir,
-                            size = size,
-                            lastModified = mtime,
-                            permissions = permissions
-                        )
-                    )
-                }
-            }
-            items.sortWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
-            return items
-        } finally {
-            channel.disconnect()
-        }
-    }
-
-    fun downloadSftpFileOnSession(session: Session, remotePath: String, destinationStream: OutputStream) {
-        val channel = session.openChannel("sftp") as ChannelSftp
-        channel.connect(CONNECT_TIMEOUT_MS)
-        try {
-            channel.get(remotePath, destinationStream)
-        } finally {
-            channel.disconnect()
-        }
-    }
-
-    fun uploadSftpFileOnSession(session: Session, sourceStream: InputStream, remotePath: String) {
-        val channel = session.openChannel("sftp") as ChannelSftp
-        channel.connect(CONNECT_TIMEOUT_MS)
-        try {
-            channel.put(sourceStream, remotePath)
-        } finally {
-            channel.disconnect()
-        }
-    }
-
-    fun deleteSftpFileOnSession(session: Session, remotePath: String, isDirectory: Boolean) {
-        val channel = session.openChannel("sftp") as ChannelSftp
-        channel.connect(CONNECT_TIMEOUT_MS)
-        try {
-            if (isDirectory) {
-                channel.rmdir(remotePath)
-            } else {
-                channel.rm(remotePath)
-            }
-        } finally {
-            channel.disconnect()
-        }
-    }
-
-    fun createSftpDirectoryOnSession(session: Session, remotePath: String) {
-        val channel = session.openChannel("sftp") as ChannelSftp
-        channel.connect(CONNECT_TIMEOUT_MS)
-        try {
-            channel.mkdir(remotePath)
-        } finally {
-            channel.disconnect()
-        }
     }
 
     /**
@@ -313,14 +228,48 @@ object SSHManager {
         remotePath: String
     ): Result<List<RemoteFileItem>> = withContext(Dispatchers.IO) {
         var session: Session? = null
+        var channel: ChannelSftp? = null
         try {
             session = createSession(host, port, username, privateKeyPem)
-            val items = listSftpFilesOnSession(session, remotePath)
+            channel = session.openChannel("sftp") as ChannelSftp
+            channel.connect()
+
+            val normalizedPath = if (remotePath.isBlank()) "." else remotePath
+            val vector = channel.ls(normalizedPath) as Vector<*>
+            val items = mutableListOf<RemoteFileItem>()
+
+            for (entry in vector) {
+                if (entry is ChannelSftp.LsEntry) {
+                    val name = entry.filename
+                    if (name == "." || name == "..") continue
+                    val attrs = entry.attrs
+                    val isDir = attrs.isDir
+                    val size = attrs.size
+                    val mtime = attrs.mTime.toLong() * 1000L
+                    val permissions = attrs.permissionsString ?: ""
+                    val fullPath = if (normalizedPath.endsWith("/")) "$normalizedPath$name" else "$normalizedPath/$name"
+
+                    items.add(
+                        RemoteFileItem(
+                            name = name,
+                            path = fullPath,
+                            isDirectory = isDir,
+                            size = size,
+                            lastModified = mtime,
+                            permissions = permissions
+                        )
+                    )
+                }
+            }
+
+            // Sortuj: najpierw foldery alfabetycznie, potem pliki
+            items.sortWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
             Result.success(items)
         } catch (e: Exception) {
             Log.e(TAG, "Błąd pobierania listy plików SFTP: ${e.message}", e)
             Result.failure(e)
         } finally {
+            channel?.disconnect()
             session?.disconnect()
         }
     }
@@ -334,13 +283,17 @@ object SSHManager {
         destinationStream: OutputStream
     ): Result<Unit> = withContext(Dispatchers.IO) {
         var session: Session? = null
+        var channel: ChannelSftp? = null
         try {
             session = createSession(host, port, username, privateKeyPem)
-            downloadSftpFileOnSession(session, remotePath, destinationStream)
+            channel = session.openChannel("sftp") as ChannelSftp
+            channel.connect()
+            channel.get(remotePath, destinationStream)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         } finally {
+            channel?.disconnect()
             session?.disconnect()
         }
     }
@@ -354,13 +307,17 @@ object SSHManager {
         remotePath: String
     ): Result<Unit> = withContext(Dispatchers.IO) {
         var session: Session? = null
+        var channel: ChannelSftp? = null
         try {
             session = createSession(host, port, username, privateKeyPem)
-            uploadSftpFileOnSession(session, sourceStream, remotePath)
+            channel = session.openChannel("sftp") as ChannelSftp
+            channel.connect()
+            channel.put(sourceStream, remotePath)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         } finally {
+            channel?.disconnect()
             session?.disconnect()
         }
     }
@@ -374,13 +331,21 @@ object SSHManager {
         isDirectory: Boolean
     ): Result<Unit> = withContext(Dispatchers.IO) {
         var session: Session? = null
+        var channel: ChannelSftp? = null
         try {
             session = createSession(host, port, username, privateKeyPem)
-            deleteSftpFileOnSession(session, remotePath, isDirectory)
+            channel = session.openChannel("sftp") as ChannelSftp
+            channel.connect()
+            if (isDirectory) {
+                channel.rmdir(remotePath)
+            } else {
+                channel.rm(remotePath)
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         } finally {
+            channel?.disconnect()
             session?.disconnect()
         }
     }
@@ -393,13 +358,17 @@ object SSHManager {
         remotePath: String
     ): Result<Unit> = withContext(Dispatchers.IO) {
         var session: Session? = null
+        var channel: ChannelSftp? = null
         try {
             session = createSession(host, port, username, privateKeyPem)
-            createSftpDirectoryOnSession(session, remotePath)
+            channel = session.openChannel("sftp") as ChannelSftp
+            channel.connect()
+            channel.mkdir(remotePath)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         } finally {
+            channel?.disconnect()
             session?.disconnect()
         }
     }

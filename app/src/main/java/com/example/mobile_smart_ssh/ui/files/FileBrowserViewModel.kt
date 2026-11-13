@@ -9,7 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.mobile_smart_ssh.core.model.RemoteFileItem
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
 import com.example.mobile_smart_ssh.network.smb.SMBStorageManager
-import com.example.mobile_smart_ssh.network.ssh.SSHSessionManager
+import com.example.mobile_smart_ssh.network.ssh.SSHManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,8 +21,7 @@ import java.io.File
 import java.io.FileOutputStream
 
 class FileBrowserViewModel(
-    private val repository: ConfigRepository,
-    private val sessionManager: SSHSessionManager
+    private val repository: ConfigRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FileBrowserUiState())
@@ -122,7 +121,13 @@ class FileBrowserViewModel(
             // 2. Automatyczny Fallback na SFTP, jeśli połączenie SMB nie powiodło się
             Log.w(TAG, "Samba (SMB) niedostępna, próba pobrania przez SFTP fallback: ${smbResult.exceptionOrNull()?.message}")
             val fullPath = resolveSftpPath(drive, relativePath, config.username)
-            val sftpResult = sessionManager.listSftpFiles(fullPath)
+            val sftpResult = SSHManager.listSftpFiles(
+                host = config.host,
+                port = config.port,
+                username = config.username,
+                privateKeyPem = privateKey,
+                remotePath = fullPath
+            )
 
             sftpResult.fold(
                 onSuccess = { list ->
@@ -192,7 +197,13 @@ class FileBrowserViewModel(
             } else {
                 // Fallback SFTP
                 val fullPath = resolveSftpPath(_uiState.value.currentDrive, newRelative, config.username)
-                sessionManager.createSftpDirectory(fullPath).isSuccess
+                SSHManager.createSftpDirectory(
+                    host = config.host,
+                    port = config.port,
+                    username = config.username,
+                    privateKeyPem = privateKey,
+                    remotePath = fullPath
+                ).isSuccess
             }
 
             if (success) {
@@ -228,7 +239,11 @@ class FileBrowserViewModel(
             val success = if (smbSuccess) {
                 true
             } else {
-                sessionManager.deleteSftpFile(
+                SSHManager.deleteSftpFile(
+                    host = config.host,
+                    port = config.port,
+                    username = config.username,
+                    privateKeyPem = privateKey,
                     remotePath = item.path,
                     isDirectory = item.isDirectory
                 ).isSuccess
@@ -275,8 +290,12 @@ class FileBrowserViewModel(
                         if (smbResult.isSuccess) {
                             Result.success(Unit)
                         } else {
-                            // Fallback SFTP na wspólnej sesji
-                            sessionManager.downloadSftpFile(
+                            // Fallback SFTP
+                            SSHManager.downloadSftpFile(
+                                host = config.host,
+                                port = config.port,
+                                username = config.username,
+                                privateKeyPem = privateKey,
                                 remotePath = item.path,
                                 destinationStream = stream
                             )
@@ -339,7 +358,11 @@ class FileBrowserViewModel(
                             // Fallback SFTP: otwórz strumień ponownie dla SFTP
                             context.contentResolver.openInputStream(uri)?.use { sftpInStream ->
                                 val fullPath = resolveSftpPath(_uiState.value.currentDrive, destRelative, config.username)
-                                sessionManager.uploadSftpFile(
+                                SSHManager.uploadSftpFile(
+                                    host = config.host,
+                                    port = config.port,
+                                    username = config.username,
+                                    privateKeyPem = privateKey,
                                     sourceStream = sftpInStream,
                                     remotePath = fullPath
                                 )
