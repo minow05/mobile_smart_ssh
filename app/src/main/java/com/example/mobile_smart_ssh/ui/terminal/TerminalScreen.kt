@@ -3,6 +3,7 @@ package com.example.mobile_smart_ssh.ui.terminal
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -348,6 +350,16 @@ fun TerminalContent(
                 }
             }
 
+            // Pasek podręcznych poleceń Linuksa (Quick Command Chips)
+            QuickCommandChips(
+                onSelectCommand = { cmd -> onAction(TerminalAction.SendCommand(cmd)) }
+            )
+
+            // Panel pomocniczy w przypadku aktywnego klawisza CTRL
+            if (state.isCtrlActive) {
+                CtrlActiveBanner(onAction = onAction)
+            }
+
             // Dedykowany pasek klawiszy funkcyjnych Termux (Extra Keys Bar nad klawiaturą)
             TermuxExtraKeysBar(
                 isCtrlActive = state.isCtrlActive,
@@ -436,6 +448,105 @@ private fun ExtraKeyButton(
             fontWeight = FontWeight.Bold,
             fontSize = 10.sp
         )
+    }
+}
+
+/**
+ * Podręczny pasek akcji skrótów klawiaturowych, gdy modyfikator CTRL jest włączony.
+ */
+@Composable
+private fun CtrlActiveBanner(
+    onAction: (TerminalAction) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF161B22))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "CTRL ON:",
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = TermuxPromptColor
+        )
+
+        ShortcutPill(label = "^C Kill") {
+            onAction(TerminalAction.CancelCommand)
+        }
+
+        ShortcutPill(label = "^L Clear") {
+            onAction(TerminalAction.ClearScreen)
+        }
+
+        ShortcutPill(label = "^D EOF") {
+            onAction(TerminalAction.ToggleCtrl)
+        }
+    }
+}
+
+@Composable
+private fun ShortcutPill(
+    label: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(3.dp),
+        color = Color(0xFF232936),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF3B4455))
+    ) {
+        Text(
+            text = label,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            color = Color.White,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+    }
+}
+
+@Composable
+private fun QuickCommandChips(onSelectCommand: (String) -> Unit) {
+    val quickCmds = listOf(
+        "ls -la",
+        "uptime",
+        "df -h /",
+        "free -h",
+        "ps aux",
+        "htop",
+        "uname -a",
+        "git status",
+        "clear"
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(TermuxPitchBlack)
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        quickCmds.forEach { cmd ->
+            Surface(
+                onClick = { onSelectCommand(cmd) },
+                shape = RoundedCornerShape(4.dp),
+                color = Color(0xFF161B22),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2A313C))
+            ) {
+                Text(
+                    text = cmd,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    color = Color(0xFF7EE787),
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                )
+            }
+        }
     }
 }
 
