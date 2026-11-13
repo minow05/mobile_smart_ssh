@@ -3,15 +3,20 @@ package com.example.mobile_smart_ssh.ui.resources
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
-import com.example.mobile_smart_ssh.network.ssh.SSHManager
+import com.example.mobile_smart_ssh.network.ssh.SSHSessionManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/**
+ * ViewModel monitora zasobów serwera w architekturze MVI.
+ * Korzysta ze wspólnej, trwałej sesji SSHSessionManager (brak renegocjacji kluczy przy każdym wejściu na ekran).
+ */
 class ResourceMonitorViewModel(
-    private val repository: ConfigRepository
+    private val repository: ConfigRepository,
+    private val sessionManager: SSHSessionManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ResourceMonitorUiState())
@@ -38,20 +43,16 @@ class ResourceMonitorViewModel(
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            val result = SSHManager.fetchSystemResources(
-                host = config.host,
-                port = config.port,
-                username = config.username,
-                privateKeyPem = privateKey
-            )
+            val result = sessionManager.fetchSystemResources()
 
             result.fold(
                 onSuccess = { res ->
                     _uiState.update {
                         it.copy(
-                            resources = res,
                             isLoading = false,
-                            lastRefreshTime = System.currentTimeMillis()
+                            resources = res,
+                            lastRefreshTime = System.currentTimeMillis(),
+                            error = null
                         )
                     }
                 },
@@ -59,7 +60,7 @@ class ResourceMonitorViewModel(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            error = "Nie udało się pobrać metryk: ${err.message}"
+                            error = err.message ?: "Nie udało się pobrać danych zasobów"
                         )
                     }
                 }

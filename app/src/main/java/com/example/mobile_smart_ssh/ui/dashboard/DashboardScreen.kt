@@ -44,7 +44,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -52,7 +51,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.koin.androidx.compose.koinViewModel
 import com.example.mobile_smart_ssh.core.model.ServerConfig
-import com.example.mobile_smart_ssh.ui.terminal.TerminalActivity
 import com.example.mobile_smart_ssh.ui.theme.CyanAccent
 import com.example.mobile_smart_ssh.ui.theme.EmeraldPrimary
 import com.example.mobile_smart_ssh.ui.theme.IndigoSecondary
@@ -71,17 +69,11 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = koinViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
 
     DashboardContent(
         state = state,
         onAction = viewModel::onAction,
-        onNavigateToTerminal = {
-            context.startActivity(TerminalActivity.createIntent(context))
-        },
-        onLaunchTerminalCommand = { cmd ->
-            context.startActivity(TerminalActivity.createIntent(context, initialCommand = cmd))
-        },
+        onNavigateToTerminal = onNavigateToTerminal,
         onNavigateToFiles = onNavigateToFiles,
         onNavigateToResources = onNavigateToResources,
         onNavigateToSettings = onNavigateToSettings
@@ -94,7 +86,6 @@ fun DashboardContent(
     state: DashboardUiState,
     onAction: (DashboardAction) -> Unit,
     onNavigateToTerminal: () -> Unit,
-    onLaunchTerminalCommand: (String) -> Unit,
     onNavigateToFiles: () -> Unit,
     onNavigateToResources: () -> Unit,
     onNavigateToSettings: () -> Unit
@@ -164,51 +155,19 @@ fun DashboardContent(
                 modifier = Modifier.padding(start = 4.dp, bottom = 12.dp)
             )
 
-            // Karta 1: Interaktywny Terminal SSH (Dedykowane Activity)
+            // Karta 1: Terminal
             DashboardActionCard(
-                title = "Terminal SSH",
-                subtitle = "Dedykowane Activity (Intent) z obsługą sesji w tle i kolorów ANSI.",
+                title = "Terminal",
                 icon = Icons.Default.Computer,
                 iconTint = EmeraldPrimary,
                 onClick = onNavigateToTerminal
             )
 
-            // Szybkie polecenia uruchamiane w osobnym TerminalActivity z parametrem Intent (htop, uptime, free -h)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                listOf("htop", "uptime", "free -h").forEach { cmd ->
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { onLaunchTerminalCommand(cmd) },
-                        colors = CardDefaults.cardColors(containerColor = SlateSurfaceVariant),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            text = "> $cmd",
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = CyanAccent,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                    }
-                }
-            }
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Karta 2: Remote File & Network Storage Manager
+            // Karta 2: Pliki
             DashboardActionCard(
-                title = "Pliki i dyski sieciowe",
-                subtitle = "Przeglądanie i zarządzanie plikami na dyskach domowym i współdzielonym.",
+                title = "Pliki",
                 icon = Icons.Default.Folder,
                 iconTint = CyanAccent,
                 onClick = onNavigateToFiles
@@ -216,10 +175,9 @@ fun DashboardContent(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Karta 3: Resource & Storage Quota Monitor
+            // Karta 3: Monitor zasobów
             DashboardActionCard(
                 title = "Monitor zasobów",
-                subtitle = "Obciążenie CPU, zużycie pamięci RAM, dysk oraz limity kwotowe.",
                 icon = Icons.Default.Insights,
                 iconTint = IndigoSecondary,
                 onClick = onNavigateToResources
@@ -227,10 +185,9 @@ fun DashboardContent(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Karta 4: Settings & Reconfiguration
+            // Karta 4: Ustawienia
             DashboardActionCard(
                 title = "Ustawienia",
-                subtitle = "Parametry połączenia, klucz SSH oraz reset powiązania hosta.",
                 icon = Icons.Default.Settings,
                 iconTint = Color.Gray,
                 onClick = onNavigateToSettings
@@ -251,7 +208,6 @@ private fun DashboardContentPreview() {
             ),
             onAction = {},
             onNavigateToTerminal = {},
-            onLaunchTerminalCommand = {},
             onNavigateToFiles = {},
             onNavigateToResources = {},
             onNavigateToSettings = {}
@@ -341,7 +297,6 @@ private fun HostStatusBadge(isOnline: Boolean?, isChecking: Boolean) {
 @Composable
 private fun DashboardActionCard(
     title: String,
-    subtitle: String,
     icon: ImageVector,
     iconTint: Color,
     onClick: () -> Unit
@@ -370,23 +325,15 @@ private fun DashboardActionCard(
                 Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(24.dp))
             }
 
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(16.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = subtitle,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 16.sp
-                )
-            }
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                modifier = Modifier.weight(1f)
+            )
 
             Icon(
                 Icons.Default.ChevronRight,
