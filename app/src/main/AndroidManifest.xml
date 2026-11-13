@@ -16,8 +16,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Mobile_smart_ssh">
-
-        <!-- 1. Główne Activity aplikacji (Dashboard) -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -26,50 +24,18 @@
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- 2. Kreator konfiguracji serwera SSH (Setup Wizard) -->
-        <activity
-            android:name=".ui.wizard.SetupWizardActivity"
-            android:exported="true"
-            android:label="Kreator połączenia SSH"
-            android:theme="@style/Theme.Mobile_smart_ssh"
-            android:windowSoftInputMode="adjustResize" />
-
-        <!-- 3. Terminal SSH w stylu Termux (dedykowana sesja konsoli) -->
+        <!-- Drugie Activity aplikacji (Terminal SSH uruchamiany przez Intent) -->
         <activity
             android:name=".ui.terminal.TerminalActivity"
             android:exported="true"
             android:label="Terminal SSH"
             android:theme="@style/Theme.Mobile_smart_ssh"
             android:windowSoftInputMode="adjustResize" />
-
-        <!-- 4. Zdalny menedżer plików SFTP / SMB -->
-        <activity
-            android:name=".ui.files.FileBrowserActivity"
-            android:exported="true"
-            android:label="Menedżer plików"
-            android:theme="@style/Theme.Mobile_smart_ssh"
-            android:windowSoftInputMode="adjustResize" />
-
-        <!-- 5. Monitor zasobów systemowych serwera -->
-        <activity
-            android:name=".ui.resources.ResourceMonitorActivity"
-            android:exported="true"
-            android:label="Monitor zasobów"
-            android:theme="@style/Theme.Mobile_smart_ssh"
-            android:windowSoftInputMode="adjustResize" />
-
-        <!-- 6. Ustawienia serwera, kluczy SSH i powiadomień -->
-        <activity
-            android:name=".ui.settings.SettingsActivity"
-            android:exported="true"
-            android:label="Ustawienia"
-            android:theme="@style/Theme.Mobile_smart_ssh"
-            android:windowSoftInputMode="adjustResize" />
-
     </application>
 
 </manifest>
