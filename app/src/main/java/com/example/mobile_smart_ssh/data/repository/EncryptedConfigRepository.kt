@@ -28,8 +28,8 @@ class EncryptedConfigRepository(private val context: Context) : ConfigRepository
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
-    } catch (t: Throwable) {
-        Log.e(TAG, "Nie udało się zainicjalizować EncryptedSharedPreferences, używam standardowych SharedPreferences: ${t.message}")
+    } catch (e: Exception) {
+        Log.e(TAG, "Nie udało się zainicjalizować EncryptedSharedPreferences, używam standardowych SharedPreferences: ${e.message}")
         context.getSharedPreferences("smartssh_prefs_fallback", Context.MODE_PRIVATE)
     }
 

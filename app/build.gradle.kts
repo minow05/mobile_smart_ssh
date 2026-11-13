@@ -7,15 +7,15 @@ plugins {
 android {
     namespace = "com.example.mobile_smart_ssh"
     compileSdk {
-        version = release(35)
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "com.example.mobile_smart_ssh"
-        minSdk = 26
-        targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.1"
+        minSdk = 34
+        targetSdk = 37
+        versionCode = 1
+        versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

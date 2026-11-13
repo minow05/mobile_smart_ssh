@@ -1,7 +1,6 @@
 package com.example.mobile_smart_ssh
 
 import android.app.Application
-import android.util.Log
 import com.example.mobile_smart_ssh.data.repository.ConfigRepository
 import com.example.mobile_smart_ssh.di.appModule
 import com.example.mobile_smart_ssh.network.ssh.SSHSessionManager
@@ -19,23 +18,15 @@ class SmartSSHApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         startKoin {
-            // Level.ERROR jest w 100% bezpieczny w wydaniach produkcyjnych na urządzeniach Samsung / Android 14
-            androidLogger(Level.ERROR)
+            androidLogger(Level.INFO)
             androidContext(this@SmartSSHApplication)
             modules(appModule)
         }
 
-        // Bezpieczne nawiązanie trwałej sesji w tle (try-catch chroni przed jakimkolwiek crashem startowym)
-        try {
-            if (repository.isConfigured()) {
-                sessionManager.ensureConnected(forceReconnect = false)
-            }
-        } catch (t: Throwable) {
-            Log.e(TAG, "Ostrzeżenie przy wczesnym starcie sesji: ${t.message}", t)
+        // Natychmiastowe nawiązanie trwałej sesji SSH w tle przy starcie procesu aplikacji
+        // (dokładny odpowiednik m_session z initialize() wersji desktopowej)
+        if (repository.isConfigured()) {
+            sessionManager.ensureConnected(forceReconnect = false)
         }
-    }
-
-    companion object {
-        private const val TAG = "SmartSSHApplication"
     }
 }
